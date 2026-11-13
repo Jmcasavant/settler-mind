@@ -5,6 +5,17 @@ decisions are marked **[approved]**; the rest were made by the agent under the w
 
 ## 2026-11-13
 
+- **Harness design and its four owner decisions** [approved] (docs/HARNESS.md):
+  1. Settlers change the world only where the claim guard allows, within a daily world-change budget per
+     settler (about 64), and every change is journaled with `/settler undo`.
+  2. Signs and notes are allowed, under the text policy and an admin listing; on by default, with a
+     config switch for public servers.
+  3. Settlers notice joins and leaves only when nearby or told.
+  4. A settler may put into any chest the claim guard lets it use, and take only from its own chests
+     or ones its owner shared.
+
+  *Revert:* each ships behind `MindFeatures` and config switches.
+
 - **Direction: settlers with a life of their own** [approved, owner]. Settlers recognise players who
   join, form beliefs about where people live, and can leave signs and notes for players and each other.
   Freedom comes from choosing goals within a growing, validated action catalog (AGENTS.md rule 1 stands).

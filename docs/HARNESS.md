@@ -1,6 +1,6 @@
 # Harness design: settlers with a life of their own
 
-Status: **draft for owner review** (2026-11-13). Basis: owner direction "build the harness, not the
+Status: **direction and owner decisions approved** (2026-11-13); phases not built yet. Basis: owner direction "build the harness, not the
 behaviour" (AGENTS.md), the research survey `docs/research/2026-11-open-ended-harness.md`, and our first
 Claude eval runs (docs/EVAL.md). Nothing here is built yet.
 
@@ -199,7 +199,7 @@ Each phase ships behind `MindFeatures` switches and is measured before and after
 - The evidence base is thin: no study covers weeks on a live multiplayer server. Our own evals have to
   carry the weight.
 
-## Owner decisions needed before phase 2
+## Owner decisions (approved 2026-11-13: all four as recommended)
 
 1. **World-change scope.** Recommendation:
    - settlers may change the world only where the claim guard allows;

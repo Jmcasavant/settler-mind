@@ -24,7 +24,7 @@ we script. So:
   guard fails closed. The safety boundary is the closed set of *kinds* of world interaction, and it
   grows deliberately.
 - Measure open-endedness, not only scripted pass/fail: diversity, coherence over long runs, and what
-  emerges (docs/EVAL.md). The harness design is docs/HARNESS.md (draft for owner review).
+  emerges (docs/EVAL.md). The harness design is docs/HARNESS.md (owner-approved).
 
 ## Working agreement: who decides what
 
