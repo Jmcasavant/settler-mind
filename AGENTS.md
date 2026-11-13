@@ -65,6 +65,7 @@ renaming would need a migration or settlers would vanish.
 | `docs/EVAL.md`, `src/test/java/dev/settlermind/eval/` | Evaluation harness: simulated world, scenarios, ablations, judged interviews, cost. |
 | `docs/STATUS.md` | What is verified and what isn't. Keep it honest and current. |
 | `docs/DECISIONS.md` | Dated decision log: what, why, alternatives, how to revert. |
+| `docs/HANDOFF.md` | Latest session handoff: state, in-flight work, next steps. Read after this file. |
 
 ## Model choice: open, measured, never hard-coded
 
