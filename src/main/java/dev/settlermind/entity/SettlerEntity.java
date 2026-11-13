@@ -221,7 +221,7 @@ public class SettlerEntity extends PathAwareEntity {
                 finishStep(Outcome.ok("staying"));
             }
             // Instant social/mental acts on the settlement board: the host applies them, the body only reports.
-            case "post_task", "claim_task", "release_task" -> finishStep(events.onBoardStep(this, step));
+            case "post_task", "claim_task", "release_task", "cancel_task" -> finishStep(events.onBoardStep(this, step));
             default -> finishStep(Outcome.fail("unknown_step", step.kind()));
         }
     }

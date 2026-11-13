@@ -53,6 +53,7 @@ public final class PerceptionBuilder {
         ServerWorld world = (ServerWorld) s.getWorld();
         BlockPos origin = s.getBlockPos();
         Vec3d eye = s.getEyePos();
+        String selfId = s.getUuid().toString();
 
         List<Perception.SeenBlock> blocks = new ArrayList<>();
         BlockPos.Mutable p = new BlockPos.Mutable();
@@ -64,7 +65,10 @@ public final class PerceptionBuilder {
                     BlockState state = world.getBlockState(p);
                     if (!notable(state)) continue;
                     if (!visible(world, s, eye, p)) continue;
-                    String reservedBy = board == null ? null : board.holder(posKey(world, p), boardNow);
+                    // Only someone else's reservation is shown; ids are compared, names are for display.
+                    String key = posKey(world, p);
+                    String holder = board == null ? null : board.holderId(key, boardNow);
+                    String reservedBy = holder == null || holder.equals(selfId) ? null : board.holderName(key, boardNow);
                     blocks.add(new Perception.SeenBlock(Registries.BLOCK.getId(state.getBlock()).getPath(),
                             p.getX(), p.getY(), p.getZ(), Math.sqrt(p.getSquaredDistance(eye)), reservedBy));
                 }
@@ -72,6 +76,7 @@ public final class PerceptionBuilder {
         }
         blocks.sort(Comparator.comparingDouble(Perception.SeenBlock::distance));
         if (blocks.size() > MAX_BLOCKS) blocks = new ArrayList<>(blocks.subList(0, MAX_BLOCKS));
+        List<Perception.SeenBlock> seenBlocks = blocks;
 
         List<Perception.SeenEntity> entities = new ArrayList<>();
         for (Entity e : world.getOtherEntities(s, new Box(origin).expand(ENTITY_RADIUS), Entity::isAlive)) {
@@ -115,7 +120,14 @@ public final class PerceptionBuilder {
         return new Perception(world.getTime(), timeOfDay, weather,
                 new int[]{origin.getX(), origin.getY(), origin.getZ()}, s.getHealth(), s.getFoodLevel(), holding, inv,
                 s.describeActivity(), List.copyOf(blocks), List.copyOf(entities),
-                board == null ? List.of() : board.views(s.getSettlerName(), boardNow));
+                board == null ? List.of() : board.views(selfId, boardNow, item -> feasible(seenBlocks, item),
+                        t -> true)); // notes: consent/provider gating comes with the host phase (review finding 2)
+    }
+
+    /** A task's item counts as feasible when a block of it is in sight. */
+    private static boolean feasible(List<Perception.SeenBlock> blocks, String item) {
+        for (Perception.SeenBlock b : blocks) if (Board.sameItem(b.id(), item)) return true;
+        return false;
     }
 
     /** Blocks worth mentioning: resources, crops, workstations, storage, beds. */

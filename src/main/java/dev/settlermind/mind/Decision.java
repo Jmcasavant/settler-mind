@@ -1,5 +1,6 @@
 package dev.settlermind.mind;
 
+import dev.settlermind.mind.board.Board;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -20,7 +21,7 @@ public record Decision(
 
     /**
      * A concrete step. Unused fields are null. Body steps (mine, go_to, ...) are carried out by the body;
-     * board steps (post_task, claim_task, release_task) are instant social/mental acts the host applies.
+     * board steps (post_task, claim_task, release_task, cancel_task) are instant social/mental acts the host applies.
      */
     public record Step(String kind, @Nullable String target, @Nullable Integer x, @Nullable Integer y,
                        @Nullable Integer z, @Nullable Integer seconds, @Nullable String item,
@@ -38,9 +39,10 @@ public record Decision(
                 case "follow" -> "follow " + target;
                 case "stay" -> "stay put";
                 case "wait" -> "wait " + seconds + "s";
-                case "post_task" -> "post a task on the board: gather " + count + " " + item;
+                case "post_task" -> "post a task on the board: gather " + count + " " + Board.displayItem(item);
                 case "claim_task" -> "claim task " + task + " on the board";
                 case "release_task" -> "release task " + task + " on the board";
+                case "cancel_task" -> "cancel my task " + task + " on the board";
                 default -> kind;
             };
         }

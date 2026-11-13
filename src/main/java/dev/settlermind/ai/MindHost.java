@@ -277,12 +277,13 @@ public final class MindHost implements SettlerEvents {
         store.minds.remove(s.getUuid());
         lastBusyTick.remove(s.getUuid());
         seenRevisions.remove(s.getUuid());
-        String name = s.getSettlerName();
+        String sid = s.getUuid().toString();
         long now = boardNow();
         for (BoardTask t : List.copyOf(store.board.tasks())) {
-            if (t.status == BoardTask.Status.CLAIMED && name.equals(t.claimant)) store.board.release(t.id, name, now);
+            if (t.claimedBy(sid)) store.board.release(t.id, sid, now);
         }
-        store.board.releaseAll(name);
+        store.board.cancelAllPostedBy(BoardTask.KIND_SETTLER, sid, now);
+        store.board.releaseAll(sid);
     }
 
     // ------------------------------------------------------------------ settlement board
@@ -302,6 +303,7 @@ public final class MindHost implements SettlerEvents {
     @Override
     public Outcome onBoardStep(SettlerEntity s, Decision.Step step) {
         String name = s.getSettlerName();
+        String sid = s.getUuid().toString();
         long now = boardNow();
         Board.Result r;
         switch (step.kind()) {
@@ -309,18 +311,22 @@ public final class MindHost implements SettlerEvents {
                 if (step.item() == null || !itemExists(step.item())) {
                     return Outcome.fail(Board.INVALID_ITEM, "no such item: " + step.item());
                 }
-                r = store.board.post(name, BoardTask.KIND_SETTLER, step.item(), step.count() == null ? 0 : step.count(), null, now);
+                r = store.board.post(sid, BoardTask.KIND_SETTLER, name, step.item(), step.count() == null ? 0 : step.count(), null, now);
                 if (r.ok()) announce(r.task().id + ": " + name + " asks for " + r.task().count + " " + r.task().item);
             }
             case "claim_task" -> {
                 String id = step.task() == null ? "" : step.task().trim().toUpperCase(Locale.ROOT);
                 Integer seen = seenRevisions.getOrDefault(s.getUuid(), Map.of()).get(id);
                 // Never seen: fail closed as stale rather than claim blind (not_found/not_open still take precedence).
-                r = store.board.claim(id, name, seen == null ? Integer.MIN_VALUE : seen, now);
+                r = store.board.claim(id, sid, name, seen == null ? Integer.MIN_VALUE : seen, now);
             }
             case "release_task" -> {
                 String id = step.task() == null ? "" : step.task().trim().toUpperCase(Locale.ROOT);
-                r = store.board.release(id, name, now);
+                r = store.board.release(id, sid, now);
+            }
+            case "cancel_task" -> {
+                String id = step.task() == null ? "" : step.task().trim().toUpperCase(Locale.ROOT);
+                r = store.board.cancel(id, sid, BoardTask.KIND_SETTLER, false, now);
             }
             default -> {
                 return Outcome.fail("unknown_step", step.kind());
@@ -334,14 +340,15 @@ public final class MindHost implements SettlerEvents {
 
     @Override
     public boolean reserveBlock(SettlerEntity s, BlockPos pos) {
-        return store.board.reserve(PerceptionBuilder.posKey(s.getWorld(), pos), s.getSettlerName(), boardNow());
+        return store.board.reserve(PerceptionBuilder.posKey(s.getWorld(), pos), s.getUuid().toString(), s.getSettlerName(), boardNow());
     }
 
     @Override
     public void releaseBlock(SettlerEntity s, BlockPos pos) {
         // A settler works one block at a time, so releasing its reservations releases this one.
-        if (s.getSettlerName().equals(store.board.holder(PerceptionBuilder.posKey(s.getWorld(), pos), boardNow()))) {
-            store.board.releaseAll(s.getSettlerName());
+        String sid = s.getUuid().toString();
+        if (sid.equals(store.board.holderId(PerceptionBuilder.posKey(s.getWorld(), pos), boardNow()))) {
+            store.board.releaseAll(sid);
         }
     }
 
@@ -357,7 +364,7 @@ public final class MindHost implements SettlerEvents {
             } catch (NumberFormatException e) {
                 continue;
             }
-            for (BoardTask t : store.board.credit(s.getSettlerName(), m.group(3), n, now)) {
+            for (BoardTask t : store.board.credit(s.getUuid().toString(), m.group(2) + ":" + m.group(3), n, now)) {
                 String what = t.id + " (gather " + t.count + " " + t.item + ")";
                 if (t.status == BoardTask.Status.DONE) {
                     mindFor(s).observe(new MindEvent.Board("Your task " + what + " is done.", false), s.getWorld().getTime());
@@ -373,8 +380,9 @@ public final class MindHost implements SettlerEvents {
     /** Lapse abandoned claims (telling the former claimant) and drop long-closed tasks. */
     private void boardUpkeep() {
         long now = boardNow();
-        for (Board.Expired e : store.board.expire(now)) {
-            SettlerEntity former = findByName(e.formerClaimant());
+        for (Board.Affected e : store.board.expire(now)) {
+            if (!e.claimLapsed()) continue; // stale OPEN tasks are cancelled silently (telling posters: later)
+            SettlerEntity former = findById(e.formerClaimantId());
             if (former != null) {
                 mindFor(former).observe(new MindEvent.Board("Your claim on " + e.task().id + " (gather " + e.task().count + " "
                         + e.task().item + ") lapsed after no progress; it is open again.", true), former.getWorld().getTime());
@@ -384,21 +392,22 @@ public final class MindHost implements SettlerEvents {
     }
 
     /** Post a task for a player (command). Item must exist in the item registry. */
-    public Board.Result postTask(String player, Identifier item, int count, String note) {
+    public Board.Result postTask(UUID playerId, String player, Identifier item, int count, String note) {
         if (!Registries.ITEM.containsId(item) || Registries.ITEM.get(item) == Items.AIR) return new Board.Result(Board.INVALID_ITEM, null);
-        Board.Result r = store.board.post(player, BoardTask.KIND_PLAYER, item.getPath(), count, note, boardNow());
+        Board.Result r = store.board.post(playerId.toString(), BoardTask.KIND_PLAYER, player, item.toString(), count, note, boardNow());
         if (r.ok()) announce(r.task().id + ": " + player + " asks for " + r.task().count + " " + r.task().item
                 + (r.task().note.isEmpty() ? "" : " (\"" + r.task().note + "\")"));
         return r;
     }
 
     /** Cancel a task (command): poster or admin. Tells the claimant, if any. */
-    public Board.Result cancelTask(String id, String by, boolean admin) {
+    public Board.Result cancelTask(String id, @Nullable UUID byId, String by, boolean admin) {
         BoardTask before = store.board.task(id == null ? null : id.trim().toUpperCase(Locale.ROOT));
-        String claimant = before == null ? null : before.claimant;
-        Board.Result r = store.board.cancel(before == null ? id : before.id, by, admin, boardNow());
+        String claimant = before == null ? null : before.claimantId;
+        Board.Result r = store.board.cancel(before == null ? id : before.id, byId == null ? null : byId.toString(),
+                BoardTask.KIND_PLAYER, admin, boardNow());
         if (r.ok() && claimant != null) {
-            SettlerEntity c = findByName(claimant);
+            SettlerEntity c = findById(claimant);
             if (c != null) {
                 mindFor(c).observe(new MindEvent.Board(by + " cancelled task " + r.task().id + " (gather " + r.task().count + " "
                         + r.task().item + "); you no longer hold it.", true), c.getWorld().getTime());
@@ -407,12 +416,11 @@ public final class MindHost implements SettlerEvents {
         return r;
     }
 
-    /** True if some registered item (any namespace, minecraft first) has this path. */
-    static boolean itemExists(String path) {
-        if (path == null || !Board.ITEM.matcher(path).matches() || path.equals("air")) return false;
-        if (Registries.ITEM.containsId(new Identifier("minecraft", path))) return true;
-        for (Identifier id : Registries.ITEM.getIds()) if (id.getPath().equals(path)) return true;
-        return false;
+    /** True if this item id (bare paths mean minecraft:) is a registered item other than air. */
+    static boolean itemExists(String item) {
+        String full = Board.normalizeItem(item);
+        Identifier id = full == null ? null : Identifier.tryParse(full);
+        return id != null && Registries.ITEM.containsId(id) && Registries.ITEM.get(id) != Items.AIR;
     }
 
     /** New posts are public settlement news: tell every online player. */
@@ -423,26 +431,36 @@ public final class MindHost implements SettlerEvents {
     }
 
     private void notifyPoster(BoardTask t, String text) {
-        if (BoardTask.KIND_SETTLER.equals(t.postedByKind)) {
-            SettlerEntity poster = findByName(t.postedBy);
-            if (poster != null && !poster.getSettlerName().equals(t.claimant)) {
+        if (BoardTask.KIND_SETTLER.equals(t.posterKind)) {
+            SettlerEntity poster = findById(t.posterId);
+            if (poster != null && !t.posterId.equals(t.claimantId)) {
                 mindFor(poster).observe(new MindEvent.Board(text, false), poster.getWorld().getTime());
             }
         } else {
-            ServerPlayerEntity p = server.getPlayerManager().getPlayer(t.postedBy);
+            UUID pid = parseUuid(t.posterId);
+            ServerPlayerEntity p = pid == null ? null : server.getPlayerManager().getPlayer(pid);
             if (p != null) p.sendMessage(Text.literal("[Board] ").formatted(Formatting.AQUA)
                     .append(Text.literal(text).formatted(Formatting.WHITE)), false);
         }
     }
 
-    private @Nullable SettlerEntity findByName(String name) {
-        if (name == null) return null;
+    /** The loaded settler with this stable id (UUID string), or null. */
+    private @Nullable SettlerEntity findById(@Nullable String id) {
+        UUID uuid = parseUuid(id);
+        if (uuid == null) return null;
         for (ServerWorld w : server.getWorlds()) {
-            for (SettlerEntity s : w.getEntitiesByType(SettlerMind.SETTLER, Entity::isAlive)) {
-                if (s.getSettlerName().equals(name)) return s;
-            }
+            if (w.getEntity(uuid) instanceof SettlerEntity s && s.isAlive()) return s;
         }
         return null;
+    }
+
+    private static @Nullable UUID parseUuid(@Nullable String id) {
+        if (id == null) return null;
+        try {
+            return UUID.fromString(id);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     // ------------------------------------------------------------------ access

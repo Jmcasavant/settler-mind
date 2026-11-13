@@ -223,11 +223,11 @@ public final class SettlerCommands {
     private static String describe(BoardTask t) {
         String state = switch (t.status) {
             case OPEN -> "open";
-            case CLAIMED -> "taken by " + t.claimant;
-            case DONE -> "done by " + t.claimant;
+            case CLAIMED -> "taken by " + t.claimantName;
+            case DONE -> "done by " + t.claimantName;
             case CANCELLED -> "cancelled";
         };
-        return t.id + ": gather " + t.count + " " + t.item + " for " + t.postedBy + " - " + state + ", " + t.progress + "/" + t.count
+        return t.id + ": gather " + t.count + " " + t.item + " for " + t.posterName + " - " + state + ", " + t.progress + "/" + t.count
                 + (t.note == null || t.note.isEmpty() ? "" : " - \"" + t.note + "\"");
     }
 
@@ -240,7 +240,7 @@ public final class SettlerCommands {
         // Notes reach settlers' prompts: plain printable text only, bounded.
         String note = rawNote.replaceAll("[\\p{Cntrl}\u00a7]", "").trim();
         if (note.length() > Board.MAX_NOTE) note = note.substring(0, Board.MAX_NOTE);
-        Board.Result r = host.postTask(p.getGameProfile().getName(), item, count, note);
+        Board.Result r = host.postTask(p.getUuid(), p.getGameProfile().getName(), item, count, note);
         if (!r.ok()) throw new SimpleCommandExceptionType(Text.literal(boardError(r.code(), item.toString()))).create();
         BoardTask t = r.task();
         c.getSource().sendFeedback(() -> Text.literal("Posted " + t.id + ": gather " + t.count + " " + t.item
@@ -254,7 +254,7 @@ public final class SettlerCommands {
         String id = StringArgumentType.getString(c, "id").toUpperCase(Locale.ROOT);
         ServerPlayerEntity p = c.getSource().getPlayer();
         String by = p != null ? p.getGameProfile().getName() : c.getSource().getName();
-        Board.Result r = host.cancelTask(id, by, c.getSource().hasPermissionLevel(2));
+        Board.Result r = host.cancelTask(id, p == null ? null : p.getUuid(), by, c.getSource().hasPermissionLevel(2));
         if (!r.ok()) throw new SimpleCommandExceptionType(Text.literal(boardError(r.code(), id))).create();
         c.getSource().sendFeedback(() -> Text.literal("Cancelled " + r.task().id + " (gather " + r.task().count + " "
                 + r.task().item + ")."), false);
@@ -267,6 +267,7 @@ public final class SettlerCommands {
             case Board.INVALID_COUNT -> "The count must be from " + Board.MIN_COUNT + " to " + Board.MAX_COUNT + ".";
             case Board.BOARD_FULL -> "The board is full (" + Board.MAX_ACTIVE_TASKS + " open tasks). Cancel or finish some first.";
             case Board.TOO_MANY_POSTS -> "You already have " + Board.MAX_ACTIVE_POSTS_PER_POSTER + " open tasks on the board.";
+            case Board.RATE_LIMITED -> "You just posted a task; wait a few seconds before posting another.";
             case Board.NOT_FOUND -> "There is no task " + subject + " on the board. See /settler board.";
             case Board.NOT_ALLOWED -> "Only whoever posted " + subject + " (or an operator) can cancel it.";
             case Board.ALREADY_CLOSED -> "Task " + subject + " is already done or cancelled.";

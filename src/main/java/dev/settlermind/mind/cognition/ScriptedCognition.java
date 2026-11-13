@@ -5,6 +5,7 @@ import com.google.gson.JsonObject;
 import dev.settlermind.mind.MindEvent;
 import dev.settlermind.mind.Perception;
 import dev.settlermind.mind.Persona;
+import dev.settlermind.mind.board.Board;
 import dev.settlermind.mind.board.BoardTask;
 import dev.settlermind.mind.board.TaskView;
 
@@ -113,7 +114,7 @@ public final class ScriptedCognition implements Cognition {
             } else {
                 TaskView taken = takeTask(req, d);
                 d.addProperty("say", taken == null ? "Nothing on the board I can do from here."
-                        : "I'll take " + taken.id() + ", the " + taken.item().replace('_', ' ') + ".");
+                        : "I'll take " + taken.id() + ", the " + Board.displayItem(taken.item()).replace('_', ' ') + ".");
             }
             return;
         }
@@ -196,7 +197,7 @@ public final class ScriptedCognition implements Cognition {
             Optional<Perception.SeenBlock> b = freeBlockOf(req, t.item());
             if (b.isEmpty()) continue;
             d.add("steps", steps(mine(b.get())));
-            d.addProperty("goal", "work on " + t.id() + ": gather " + t.count() + " " + t.item());
+            d.addProperty("goal", "work on " + t.id() + ": gather " + t.count() + " " + Board.displayItem(t.item()));
             d.addProperty("mood", "busy");
             return true;
         }
@@ -205,7 +206,7 @@ public final class ScriptedCognition implements Cognition {
 
     /** Claim the oldest open task whose item is in sight, and mine one free block of it. */
     private static TaskView takeTask(CognitionRequest req, JsonObject d) {
-        for (TaskView t : req.perception().board()) { // views list open tasks oldest first
+        for (TaskView t : req.perception().board()) { // views list own claims, then feasible open tasks, oldest first
             if (t.status() != BoardTask.Status.OPEN) continue;
             Optional<Perception.SeenBlock> b = freeBlockOf(req, t.item());
             if (b.isEmpty()) continue;
@@ -213,23 +214,23 @@ public final class ScriptedCognition implements Cognition {
             claim.addProperty("kind", "claim_task");
             claim.addProperty("task", t.id());
             d.add("steps", steps(claim, mine(b.get())));
-            d.addProperty("goal", "work on " + t.id() + ": gather " + t.count() + " " + t.item());
+            d.addProperty("goal", "work on " + t.id() + ": gather " + t.count() + " " + Board.displayItem(t.item()));
             d.addProperty("mood", "busy");
             return t;
         }
         return null;
     }
 
-    /** Nearest visible block of this item that nobody else is working on. */
+    /** Nearest visible block of this item (block ids are paths like oak_log; items are full ids) that nobody else is working on. */
     private static Optional<Perception.SeenBlock> freeBlockOf(CognitionRequest req, String item) {
         return req.perception().blocks().stream()
-                .filter(b -> b.id().equals(item) && free(req, b))
+                .filter(b -> Board.sameItem(b.id(), item) && free(req, b))
                 .min(Comparator.comparingDouble(Perception.SeenBlock::distance));
     }
 
-    /** Nobody else is working on this block. */
+    /** Nobody else is working on this block ({@code reservedBy} is only ever set for someone else). */
     private static boolean free(CognitionRequest req, Perception.SeenBlock b) {
-        return b.reservedBy() == null || b.reservedBy().equalsIgnoreCase(req.settlerName());
+        return b.reservedBy() == null;
     }
 
     private static JsonObject base(String mood) {

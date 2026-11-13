@@ -27,8 +27,9 @@ public record Perception(
         List<TaskView> board) {
 
     /**
-     * A notable block the settler can see, e.g. a log, ore, crop, chest or bed. {@code reservedBy} names the
-     * settler currently working on it, or is null when nobody is.
+     * A notable block the settler can see, e.g. a log, ore, crop, chest or bed. {@code reservedBy} is the display
+     * name of <em>someone else</em> currently working on it, or null when it is free or held by this settler
+     * (the host compares stable ids when filling it; the mind never compares names).
      */
     public record SeenBlock(String id, int x, int y, int z, double distance, @Nullable String reservedBy) {
         public SeenBlock(String id, int x, int y, int z, double distance) {
@@ -59,10 +60,19 @@ public record Perception(
         return null;
     }
 
-    /** The same perception with a different board (e.g. empty, when the board feature is off). */
+    /** The same perception with a different board. */
     public Perception withBoard(List<TaskView> newBoard) {
         return new Perception(tick, timeOfDay, weather, position, health, food, holding, inventory, activity,
                 blocks, entities, newBoard);
+    }
+
+    /** The same perception with no trace of the board: no tasks and no block reservations (board ablation). */
+    public Perception withoutBoard() {
+        List<SeenBlock> plain = blocks.stream()
+                .map(b -> b.reservedBy() == null ? b : new SeenBlock(b.id(), b.x(), b.y(), b.z(), b.distance(), null))
+                .toList();
+        return new Perception(tick, timeOfDay, weather, position, health, food, holding, inventory, activity,
+                plain, entities, List.of());
     }
 
     public boolean canSee(String kind, String name) {

@@ -65,3 +65,17 @@ world edits.
 ## Fix status
 
 (updated as fixes land)
+
+Phase A (board core and mind; see docs/BOARD.md "Changes after review"):
+- [x] 1. Identity: stable id + kind everywhere on the board; names display only.
+- [x] 2. Notes, board side: sanitised, framed as the poster's words, `noteVisible` gate, system prompt rule.
+  Host side (consent/provider gating) still open.
+- [x] 3. Liveness: OPEN TTL (3 days), `cancel_task`, `cancelAllPostedBy` on dismissal, feasibility-ranked views.
+- [ ] 4. Credit only from this break's drops (host).
+- [x] 5. Rate limit per poster, closed-task cap (50), bounded history. Less broadcasting: host, open.
+- [ ] 6. Eval simulation fidelity (sim).
+- [x] 7. `Board.load` re-validates, repairs or drops, and bounds sizes.
+- [x] 8. No case-insensitive name comparisons for authority (ids compared exactly).
+- [ ] 9. Reservation leaks and lapses (host).
+- [x] 10. `no_board` ablation hides and doesn't enforce `reservedBy`.
+- [x] 11. Board side: full namespaced item ids, exact normalised credit. (Cancel-after-break credit: unchanged, fails safe.)

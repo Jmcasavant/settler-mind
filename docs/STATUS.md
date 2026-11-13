@@ -6,7 +6,7 @@ Fabric Language Kotlin 1.13.14+kotlin.2.4.20 (runtime for the SDK; chosen becaus
 
 ## Verified
 
-**Unit tests: 52/52 pass**: mind 13, board core 19, board in the mind 12, eval harness 8.
+**Unit tests: 63/63 pass**: mind 13, board core 29, board in the mind 13, eval harness 8 (after the board review fixes, phase A: identity by id, OPEN TTL, rate limit, closed-task cap, load repair, namespaced items, note framing; docs/BOARD.md "Changes after review"). Game tests 11/11 pass on the same build (1 run).
 
 **Mind unit tests (13)** (`./gradlew test`, no Minecraft needed)
 - Relevant memories beat recent trivia; forgetting spares reflections and lessons.

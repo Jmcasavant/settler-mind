@@ -19,10 +19,11 @@ public final class ActionCatalog {
             new Kind("wait", "seconds", "Pause for 1-60 seconds."),
             new Kind("post_task", "item,count", "Ask for help on the settlement task board: gather count (1-64) of an item id like oak_log. Instant."),
             new Kind("claim_task", "task", "Take an open task from the board by its id, e.g. T3. Instant; then do the work yourself."),
-            new Kind("release_task", "task", "Give up a task you hold, by its id, so someone else can take it. Instant."));
+            new Kind("release_task", "task", "Give up a task you hold, by its id, so someone else can take it. Instant."),
+            new Kind("cancel_task", "task", "Withdraw a request you posted yourself, by its id, when you no longer need it. Instant."));
 
     /** Instant social/mental steps on the settlement board, executed by the host rather than the body. */
-    public static final Set<String> BOARD_KINDS = Set.of("post_task", "claim_task", "release_task");
+    public static final Set<String> BOARD_KINDS = Set.of("post_task", "claim_task", "release_task", "cancel_task");
 
     public static final int MAX_STEPS = 3;
     public static final int MAX_WALK = 32;

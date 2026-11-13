@@ -239,8 +239,8 @@ public final class SettlerGameTests implements FabricGameTest {
         MindHost host = host();
         Board board = host.board();
         long now = ctx.getWorld().getTime();
-        for (BoardTask t : List.copyOf(board.tasks())) if (t.active()) board.cancel(t.id, "test", true, now); // leftovers
-        BoardTask task = board.post("Alex", BoardTask.KIND_PLAYER, "oak_log", 2, "for the fence", now).task();
+        for (BoardTask t : List.copyOf(board.tasks())) if (t.active()) board.cancel(t.id, null, null, true, now); // leftovers
+        BoardTask task = board.post("gametest-alex", BoardTask.KIND_PLAYER, "Alex", "oak_log", 2, "for the fence", now).task();
         if (task == null) throw new GameTestException("could not post");
         BlockPos log1 = new BlockPos(4, 1, 3), log2 = new BlockPos(5, 1, 5);
         ctx.setBlockState(log1, Blocks.OAK_LOG);
@@ -256,8 +256,9 @@ public final class SettlerGameTests implements FabricGameTest {
             if (claims > 1) throw new GameTestException("two claims: " + task.history); // never recovers: fails at deadline
             if (task.status != BoardTask.Status.DONE) throw new GameTestException("task " + task.status + " " + task.progress + "/2 " + task.history);
             if (task.progress != 2 || claims != 1) throw new GameTestException("progress " + task.progress + ", claims " + claims);
-            SettlerEntity winner = "Bea".equals(task.claimant) ? bea : "Cal".equals(task.claimant) ? cal : null;
-            if (winner == null) throw new GameTestException("unexpected claimant " + task.claimant);
+            SettlerEntity winner = bea.getUuid().toString().equals(task.claimantId) ? bea
+                    : cal.getUuid().toString().equals(task.claimantId) ? cal : null;
+            if (winner == null) throw new GameTestException("unexpected claimant " + task.claimantName);
             SettlerEntity other = winner == bea ? cal : bea;
             ctx.expectBlock(Blocks.AIR, log1);
             ctx.expectBlock(Blocks.AIR, log2);
@@ -290,7 +291,7 @@ public final class SettlerGameTests implements FabricGameTest {
         AtomicBoolean eliTold = new AtomicBoolean();
         until(ctx, 380, () -> {
             if (!eliTold.get()) {
-                if (!"Dot".equals(board.holder(key, ctx.getWorld().getTime()))) throw new GameTestException("Dot has not reserved the log");
+                if (!dot.getUuid().toString().equals(board.holderId(key, ctx.getWorld().getTime()))) throw new GameTestException("Dot has not reserved the log");
                 eli.setPlan(List.of(mine));
                 eliTold.set(true);
                 throw new GameTestException("Eli just told to mine");
@@ -301,7 +302,7 @@ public final class SettlerGameTests implements FabricGameTest {
             }
             expectOutcome(dot, Outcome.Status.SUCCEEDED, "ok");
             if (count(dot, Items.OAK_LOG) != 1 || count(eli, Items.OAK_LOG) != 0) throw new GameTestException("log went to the wrong settler");
-            if (board.holder(key, ctx.getWorld().getTime()) != null) throw new GameTestException("reservation not released after mining");
+            if (board.holderId(key, ctx.getWorld().getTime()) != null) throw new GameTestException("reservation not released after mining");
         });
     }
 }

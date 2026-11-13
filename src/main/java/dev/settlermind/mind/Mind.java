@@ -152,8 +152,9 @@ public final class Mind {
             return null;
         }
         Perception seen = perceive.get();
-        // Ablation: with the board off the mind never sees it (prompts, scripted mind and validation alike).
-        if (!features.board() && !seen.board().isEmpty()) seen = seen.withBoard(List.of());
+        // Ablation: with the board off the mind never sees it, tasks or block reservations
+        // (prompts, scripted mind and validation alike).
+        if (!features.board()) seen = seen.withoutBoard();
         String user = switch (route) {
             case "plan" -> Prompts.plan(this, seen, tick);
             case "reflect" -> Prompts.reflect(this, tick);
@@ -221,7 +222,7 @@ public final class Mind {
                 return null;
             }
             default -> {
-                DecisionParser.Result parsed = DecisionParser.parse(res.text(), req.perception(), features, persona.name());
+                DecisionParser.Result parsed = DecisionParser.parse(res.text(), req.perception(), features);
                 if (!parsed.clean()) lastError = String.join("; ", parsed.errors());
                 Decision d = parsed.decision();
                 apply(d, res.text(), tick);

@@ -99,8 +99,13 @@ public final class Simulation {
             p.traits().putAll(spec.traits());
             agents.put(spec.name(), new Agent(spec.name(), new Mind(spec.name(), p, spec.owner(), features), spec.pos().clone()));
         }
-        for (Scenario.TaskSpec t : scenario.boardTasks()) {
-            Board.Result r = board.post(t.postedBy(), t.postedByKind(), t.item(), t.count(), t.note(), 0);
+        List<Scenario.TaskSpec> seeds = scenario.boardTasks();
+        for (int i = 0; i < seeds.size(); i++) {
+            Scenario.TaskSpec t = seeds.get(i);
+            // Seeds are "already on the board" at tick 0; space them by the per-poster rate limit, the last at 0.
+            long postedAt = -(seeds.size() - 1 - i) * Board.POST_INTERVAL_TICKS;
+            // In the simulation names are unique, so a name doubles as the stable id.
+            Board.Result r = board.post(t.postedBy(), t.postedByKind(), t.postedBy(), t.item(), t.count(), t.note(), postedAt);
             if (!r.ok()) throw new IllegalArgumentException("scenario " + scenario.name() + " seeds a bad task: " + r.code());
             log.add(new LogLine(0, t.postedBy(), "board", "posted " + r.task().id + ": gather " + t.count() + " " + t.item()));
         }
@@ -120,11 +125,15 @@ public final class Simulation {
 
     /** The host's periodic board upkeep: lapsed claims go back to OPEN and their former claimant is told. */
     private void boardUpkeep() {
-        for (Board.Expired e : board.expire(tick)) {
+        for (Board.Affected e : board.expire(tick)) {
+            if (!e.claimLapsed()) {
+                log.add(new LogLine(tick, e.task().posterName, "board", e.task().id + " expired unclaimed"));
+                continue;
+            }
             metrics.expiredClaims++;
             BoardTask t = e.task();
-            log.add(new LogLine(tick, e.formerClaimant(), "board", "claim on " + t.id + " lapsed"));
-            Agent a = agents.get(e.formerClaimant());
+            log.add(new LogLine(tick, e.formerClaimantName(), "board", "claim on " + t.id + " lapsed"));
+            Agent a = agents.get(e.formerClaimantId());
             if (a != null && features.board()) {
                 a.mind.observe(new MindEvent.Board("Your claim on " + t.id + " (gather " + t.count + " "
                         + t.item + ") lapsed after no progress.", true), tick);
@@ -156,7 +165,7 @@ public final class Simulation {
                 metrics.ticksToDone.put(t.id, t.doneTick - t.createdTick);
             }
             metrics.boardFinal.add(t.id + " " + t.status + " " + t.item + " " + t.progress + "/" + t.count
-                    + (t.claimant == null ? "" : " by " + t.claimant));
+                    + (t.claimantName == null ? "" : " by " + t.claimantName));
         }
         metrics.callsPerDoneTask = metrics.tasksDone == 0 ? null : (double) metrics.totalCalls() / metrics.tasksDone;
     }
@@ -232,7 +241,7 @@ public final class Simulation {
         ledger.record(req.route(), res);
         metrics.call(req.route(), res);
         if (res.ok() && req.route().equals("decide")) {
-            DecisionParser.Result parsed = DecisionParser.parse(res.text(), req.perception(), a.mind.features(), a.name);
+            DecisionParser.Result parsed = DecisionParser.parse(res.text(), req.perception(), a.mind.features());
             metrics.parsed(parsed);
         }
         if (req.route().equals("decide")) a.lastDecisionPerception = req.perception();
@@ -262,8 +271,8 @@ public final class Simulation {
                 String k = Scenario.key(step.x(), step.y(), step.z());
                 String id = blocks.get(k);
                 // Like the host: reserve before breaking; a block someone else is working on fails.
-                if (!board.reserve(k, a.name, tick)) {
-                    status = "FAILED"; code = "reserved"; detail = board.holder(k, tick) + " is working on it";
+                if (!board.reserve(k, a.name, a.name, tick)) {
+                    status = "FAILED"; code = "reserved"; detail = board.holderName(k, tick) + " is working on it";
                     metrics.reservationConflicts++;
                 } else if (id == null) {
                     status = "FAILED"; code = "target_missing";
@@ -284,7 +293,7 @@ public final class Simulation {
             }
             case "go_to" -> { a.pos[0] = step.x(); a.pos[1] = step.y(); a.pos[2] = step.z(); }
             case "follow", "stay", "wait" -> { }
-            case "post_task", "claim_task", "release_task" -> {
+            case "post_task", "claim_task", "release_task", "cancel_task" -> {
                 code = boardStep(a, step);
                 if (!code.equals(Board.OK)) status = "FAILED";
             }
@@ -311,17 +320,18 @@ public final class Simulation {
         Board.Result r;
         switch (step.kind()) {
             case "post_task" -> {
-                r = board.post(a.name, BoardTask.KIND_SETTLER, step.item(), step.count() == null ? 0 : step.count(), null, tick);
+                r = board.post(a.name, BoardTask.KIND_SETTLER, a.name, step.item(), step.count() == null ? 0 : step.count(), null, tick);
                 if (r.ok()) metrics.boardPosts++;
             }
             case "claim_task" -> {
                 BoardTask before = board.task(id);
                 boolean heldByOther = before != null && before.status == BoardTask.Status.CLAIMED
-                        && !a.name.equals(before.claimant);
+                        && !a.name.equals(before.claimantId);
                 // The fencing token: the revision this settler saw when it decided; unseen tasks can't match.
-                r = board.claim(id, a.name, a.seenRevisions.getOrDefault(id, -1), tick);
+                r = board.claim(id, a.name, a.name, a.seenRevisions.getOrDefault(id, -1), tick);
                 metrics.claim(r.code(), heldByOther);
             }
+            case "cancel_task" -> r = board.cancel(id, a.name, BoardTask.KIND_SETTLER, false, tick);
             default -> {
                 r = board.release(id, a.name, tick);
                 if (r.ok()) metrics.releases++;
@@ -337,7 +347,10 @@ public final class Simulation {
             String[] p = k.split(",");
             int x = Integer.parseInt(p[0]), y = Integer.parseInt(p[1]), z = Integer.parseInt(p[2]);
             double d = dist(a.pos, new int[]{x, y, z});
-            if (d <= 10) seen.add(new Perception.SeenBlock(id, x, y, z, d, board.holder(k, tick)));
+            // Like the host: only someone else's reservation is shown (ids compared; here ids are names).
+            String holder = board.holderId(k, tick);
+            if (d <= 10) seen.add(new Perception.SeenBlock(id, x, y, z, d,
+                    holder == null || holder.equals(a.name) ? null : board.holderName(k, tick)));
         });
         List<Perception.SeenEntity> ents = new ArrayList<>();
         for (String player : scenario.playersPresent()) {
@@ -351,7 +364,9 @@ public final class Simulation {
         String time = t < 6000 ? "morning" : t < 12000 ? "afternoon" : t < 18000 ? "night" : "late night";
         return new Perception(tick, time, "clear", a.pos.clone(), 20, 20, "nothing", Map.copyOf(a.inventory),
                 a.plan.isEmpty() ? "standing around" : "busy", seen, ents,
-                features.board() ? board.views(a.name, tick) : List.of()); // ablation: no board in sight
+                features.board() ? board.views(a.name, tick,
+                        item -> seen.stream().anyMatch(b -> Board.sameItem(b.id(), item)), task -> true)
+                        : List.of()); // ablation: no board in sight
     }
 
     private String ownerOf(Agent a) {
