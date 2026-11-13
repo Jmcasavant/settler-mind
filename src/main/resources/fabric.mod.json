@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "hearthkin",
+  "version": "${version}",
+  "name": "Hearthkin (working title)",
+  "description": "AI settlers that live, work and remember. Spike build: body, skills and protection only; no LLM yet.",
+  "authors": ["Hearthkin contributors"],
+  "license": "All-Rights-Reserved",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["dev.hearthkin.Hearthkin"],
+    "client": ["dev.hearthkin.client.HearthkinClient"],
+    "fabric-gametest": ["dev.hearthkin.gametest.SettlerGameTests"]
+  },
+  "depends": {
+    "fabricloader": ">=0.15.0",
+    "minecraft": "~1.20.1",
+    "java": ">=17",
+    "fabric-api": "*"
+  }
+}
