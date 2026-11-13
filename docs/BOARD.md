@@ -140,3 +140,21 @@ Compare `full` against `no_board` (same script; the board is hidden from minds).
   - Reservations expire once their age reaches `RESERVATION_TTL`.
   - Re-reserving by the same holder refreshes the TTL.
 - **Render:** an OPEN task with partial progress shows `: p/c`; a note is shown as ` ("note")`.
+
+## Clarifications made during implementation (phase 3, Minecraft host)
+
+- **Board clock:** the board uses the overworld time, so every dimension agrees.
+- **Block keys:** a block key is `"x,y,z"` in the overworld and `"<dimension id>|x,y,z"` elsewhere. There is still one board per world save.
+- **Claim fencing:** for `claim_task`, the expected revision comes from the perception behind the decision whose plan is running. It is recorded when a decision with steps is applied. A task the settler never saw is claimed with an impossible revision, so it fails closed: `stale`, unless `not_found`/`not_open` applies first.
+- **`post_task` items:** the item must exist in the item registry (any namespace with that path). `air` is rejected.
+- **Reservations and mining:**
+  - `MineBlockSkill` reserves the block on its first tick, before walking, so others see it as taken. It re-checks right before breaking.
+  - Any end of the skill releases the reservation: success, failure or cancel.
+  - The body talks to the board only through `SettlerEvents` hooks (`reserveBlock`, `releaseBlock`, `onBoardStep`). With no host installed, board steps fail with `no_board`.
+- **Credit:** credit applies to plan steps only. `/settler mine` is a direct body command with no mind step, so it is not credited.
+- **Notifications:**
+  - Posts are announced to online players.
+  - DONE is reported to the poster: a chat line for a player, a `MindEvent.Board` for a settler.
+  - Cancelling a claimed task tells the claimant (wakes it).
+- **Dismissal:** dismissing a settler releases its claims and reservations.
+- **Identity (known limitation):** claims are by settler name, so two settlers with the same name (different owners) share claims.

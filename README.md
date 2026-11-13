@@ -27,6 +27,9 @@ Requires JDK 17+ (builds target Java 17).
 | *say their name in chat* | e.g. "Tess, could you chop that log?" They decide whether and how to respond |
 | `/settler mind <name>` | Personality, mood, needs, summary, today's intentions, relationships, lessons, recent memories |
 | `/settler consent on\|off` | Allow your chat to be sent to a remote AI provider (off by default) |
+| `/settler board` | The settlement task board: open and taken tasks, progress, recently closed |
+| `/settler task post <item> <count> [note]` | Ask for help, e.g. `/settler task post oak_log 8 for the fence`. Settlers choose whether to take it; progress counts only what they verifiably gather |
+| `/settler task cancel <id>` | Cancel a task you posted (operators: any task) |
 | `/settler usage` | (op) AI calls, tokens, latency and estimated cost per route and model |
 | Right-click with an item / sneak + right-click | Give item / open their inventory (owner only) |
 

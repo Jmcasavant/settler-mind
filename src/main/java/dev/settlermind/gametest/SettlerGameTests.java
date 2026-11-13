@@ -2,8 +2,12 @@ package dev.settlermind.gametest;
 
 import dev.settlermind.SettlerMind;
 import dev.settlermind.ai.MindHost;
+import dev.settlermind.ai.PerceptionBuilder;
+import dev.settlermind.mind.Decision;
 import dev.settlermind.mind.Memory;
 import dev.settlermind.mind.Mind;
+import dev.settlermind.mind.board.Board;
+import dev.settlermind.mind.board.BoardTask;
 import dev.settlermind.entity.SettlerEntity;
 import dev.settlermind.skill.MineBlockSkill;
 import dev.settlermind.skill.Outcome;
@@ -19,6 +23,9 @@ import net.minecraft.test.GameTestException;
 import net.minecraft.test.TestContext;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
+
+import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * In-world regression tests, run headless with {@code ./gradlew runGametest}.
@@ -207,6 +214,94 @@ public final class SettlerGameTests implements FabricGameTest {
             boolean did = mind.memory().all().stream().anyMatch(m -> m.kind() == Memory.Kind.EVENT && m.text().contains("succeeded"));
             if (!heard || !decided || !did) throw new GameTestException("memory incomplete: heard=" + heard + " decided=" + decided + " did=" + did);
             if (mind.relationships().get("Alex").affinity <= 0.35) throw new GameTestException("politeness not noticed");
+        });
+    }
+
+    // ------------------------------------------------------------------ settlement board
+    // Own batch: the board is shared by the whole world, so these must not overlap other tests.
+
+    private static SettlerEntity named(TestContext ctx, String name, BlockPos pos) {
+        SettlerEntity s = ctx.spawnEntity(SettlerMind.SETTLER, pos);
+        s.setSettlerName(name);
+        s.setMode(SettlerEntity.Mode.STAY);
+        return s;
+    }
+
+    private static MindHost host() {
+        MindHost host = MindHost.get();
+        if (host == null) throw new GameTestException("mind host not running");
+        return host;
+    }
+
+    @GameTest(templateName = EMPTY_STRUCTURE, tickLimit = 900, batchId = "board")
+    public void boardTaskHasOneClaimantAndOnlyVerifiedCredit(TestContext ctx) {
+        floor(ctx);
+        MindHost host = host();
+        Board board = host.board();
+        long now = ctx.getWorld().getTime();
+        for (BoardTask t : List.copyOf(board.tasks())) if (t.active()) board.cancel(t.id, "test", true, now); // leftovers
+        BoardTask task = board.post("Alex", BoardTask.KIND_PLAYER, "oak_log", 2, "for the fence", now).task();
+        if (task == null) throw new GameTestException("could not post");
+        BlockPos log1 = new BlockPos(4, 1, 3), log2 = new BlockPos(5, 1, 5);
+        ctx.setBlockState(log1, Blocks.OAK_LOG);
+        ctx.setBlockState(log2, Blocks.OAK_LOG);
+        SettlerEntity bea = named(ctx, "Bea", START);
+        SettlerEntity cal = named(ctx, "Cal", new BlockPos(1, 1, 6));
+        for (SettlerEntity s : List.of(bea, cal)) {
+            host.mindFor(s).relationships().get("Alex").affinity = 0.6; // willing, whatever the random persona
+            host.hear(s, "Alex", "player", s.getSettlerName() + ", anything on the board?", true, true);
+        }
+        until(ctx, 880, () -> {
+            long claims = task.history.stream().filter(h -> h.contains("claimed by")).count();
+            if (claims > 1) throw new GameTestException("two claims: " + task.history); // never recovers: fails at deadline
+            if (task.status != BoardTask.Status.DONE) throw new GameTestException("task " + task.status + " " + task.progress + "/2 " + task.history);
+            if (task.progress != 2 || claims != 1) throw new GameTestException("progress " + task.progress + ", claims " + claims);
+            SettlerEntity winner = "Bea".equals(task.claimant) ? bea : "Cal".equals(task.claimant) ? cal : null;
+            if (winner == null) throw new GameTestException("unexpected claimant " + task.claimant);
+            SettlerEntity other = winner == bea ? cal : bea;
+            ctx.expectBlock(Blocks.AIR, log1);
+            ctx.expectBlock(Blocks.AIR, log2);
+            if (count(winner, Items.OAK_LOG) != 2 || count(other, Items.OAK_LOG) != 0) {
+                throw new GameTestException("logs: claimant " + count(winner, Items.OAK_LOG) + ", other " + count(other, Items.OAK_LOG));
+            }
+            for (Memory m : host.mindFor(other).memory().all()) {
+                if (m.kind() == Memory.Kind.EVENT && m.text().contains("claim task") && m.text().contains("succeeded")) {
+                    throw new GameTestException("the other settler's claim succeeded: " + m.text());
+                }
+                if (m.kind() == Memory.Kind.EVENT && m.text().contains("claim task")
+                        && !(m.text().contains("not_open") || m.text().contains("stale"))) {
+                    throw new GameTestException("the other settler's claim failed oddly: " + m.text());
+                }
+            }
+        });
+    }
+
+    @GameTest(templateName = EMPTY_STRUCTURE, tickLimit = 400, batchId = "board")
+    public void reservedBlockCannotBeMinedBySomeoneElse(TestContext ctx) {
+        floor(ctx);
+        Board board = host().board();
+        ctx.setBlockState(LOG, Blocks.OAK_LOG);
+        BlockPos abs = ctx.getAbsolutePos(LOG);
+        String key = PerceptionBuilder.posKey(ctx.getWorld(), abs);
+        Decision.Step mine = new Decision.Step("mine", null, abs.getX(), abs.getY(), abs.getZ(), null);
+        SettlerEntity dot = named(ctx, "Dot", START);
+        SettlerEntity eli = named(ctx, "Eli", new BlockPos(6, 1, 1));
+        dot.setPlan(List.of(mine));
+        AtomicBoolean eliTold = new AtomicBoolean();
+        until(ctx, 380, () -> {
+            if (!eliTold.get()) {
+                if (!"Dot".equals(board.holder(key, ctx.getWorld().getTime()))) throw new GameTestException("Dot has not reserved the log");
+                eli.setPlan(List.of(mine));
+                eliTold.set(true);
+                throw new GameTestException("Eli just told to mine");
+            }
+            Outcome e = eli.getLastOutcome();
+            if (e == null || e.status() != Outcome.Status.FAILED || !e.code().equals("reserved")) {
+                throw new GameTestException("Eli should fail with reserved, got " + e);
+            }
+            expectOutcome(dot, Outcome.Status.SUCCEEDED, "ok");
+            if (count(dot, Items.OAK_LOG) != 1 || count(eli, Items.OAK_LOG) != 0) throw new GameTestException("log went to the wrong settler");
+            if (board.holder(key, ctx.getWorld().getTime()) != null) throw new GameTestException("reservation not released after mining");
         });
     }
 }

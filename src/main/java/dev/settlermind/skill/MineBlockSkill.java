@@ -50,11 +50,13 @@ public final class MineBlockSkill implements Skill {
     public @Nullable Outcome tick(SettlerEntity s) {
         ServerWorld world = (ServerWorld) s.getWorld();
         phaseTicks++;
-        return switch (phase) {
+        Outcome out = switch (phase) {
             case APPROACH -> approach(s, world);
             case BREAK -> breakTick(s, world);
             case COLLECT -> collect(s, world);
         };
+        if (out != null) SettlerEntity.events.releaseBlock(s, target);
+        return out;
     }
 
     private @Nullable Outcome approach(SettlerEntity s, ServerWorld world) {
@@ -62,11 +64,15 @@ public final class MineBlockSkill implements Skill {
         BlockState state = world.getBlockState(target);
         if (state.isAir()) return Outcome.fail("target_missing", "nothing to mine");
         if (state.getHardness(world, target) < 0) return Outcome.fail("unbreakable", id(state));
+        // Claim the block on the board before walking over, so others see it is taken.
+        if (phaseTicks == 1 && !SettlerEntity.events.reserveBlock(s, target)) return reserved();
         Outcome walk = approach.tick(s);
         if (walk == null) return null;
         if (walk.status() != Outcome.Status.SUCCEEDED) return walk;
         String denied = BorrowedHands.with(s, fake -> ProtectionGuard.checkModify(world, fake, target));
         if (denied != null) return Outcome.fail(denied, target.toShortString());
+        // Re-check (and refresh) the reservation right before breaking: fail closed if someone else holds it.
+        if (!SettlerEntity.events.reserveBlock(s, target)) return reserved();
         s.equipBestToolFor(state);
         expected = state;
         before = s.inventoryCounts();
@@ -132,8 +138,13 @@ public final class MineBlockSkill implements Skill {
                 .collect(Collectors.joining(", ")));
     }
 
+    private Outcome reserved() {
+        return Outcome.fail("reserved", "someone else is working on " + target.toShortString());
+    }
+
     @Override
     public Outcome cancel(SettlerEntity s) {
+        SettlerEntity.events.releaseBlock(s, target);
         s.getNavigation().stop();
         s.getWorld().setBlockBreakingInfo(s.getId(), target, -1);
         if (phase == Phase.COLLECT) return Outcome.partial("cancelled_after_break", "block already broken");

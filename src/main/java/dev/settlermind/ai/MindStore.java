@@ -3,6 +3,7 @@ package dev.settlermind.ai;
 import com.google.gson.Gson;
 import dev.settlermind.SettlerMind;
 import dev.settlermind.mind.Mind;
+import dev.settlermind.mind.board.Board;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.world.PersistentState;
 
@@ -13,7 +14,7 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Minds and chat-consent choices, stored in the world save
+ * Minds, chat-consent choices and the settlement task board, stored in the world save
  * ({@code data/settlermind_minds.dat}) so backups and rollbacks keep them consistent with
  * the world. Minds are serialised as JSON strings to keep the mind package engine-free.
  */
@@ -23,6 +24,7 @@ public final class MindStore extends PersistentState {
 
     final Map<UUID, Mind> minds = new LinkedHashMap<>();
     final Set<UUID> chatConsent = new HashSet<>();
+    Board board = new Board();
 
     public static MindStore fromNbt(NbtCompound nbt) {
         MindStore s = new MindStore();
@@ -41,6 +43,15 @@ public final class MindStore extends PersistentState {
                 s.chatConsent.add(UUID.fromString(key));
             } catch (IllegalArgumentException ignored) { }
         }
+        if (nbt.contains("Board")) {
+            try {
+                s.board = Board.load(GSON.fromJson(nbt.getString("Board"), Board.Saved.class));
+            } catch (RuntimeException e) {
+                // A corrupt board must not take the world down; the settlement starts with an empty one.
+                SettlerMind.LOG.error("Could not load the settlement board; starting an empty one", e);
+                s.board = new Board();
+            }
+        }
         return s;
     }
 
@@ -52,6 +63,7 @@ public final class MindStore extends PersistentState {
         NbtCompound c = new NbtCompound();
         chatConsent.forEach(id -> c.putBoolean(id.toString(), true));
         nbt.put("Consent", c);
+        nbt.putString("Board", GSON.toJson(board.save()));
         nbt.putInt("Version", 1);
         return nbt;
     }

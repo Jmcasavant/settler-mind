@@ -1,6 +1,7 @@
 package dev.settlermind.command;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
@@ -11,10 +12,14 @@ import dev.settlermind.ai.MindHost;
 import dev.settlermind.mind.Memory;
 import dev.settlermind.mind.Mind;
 import dev.settlermind.mind.Relationships;
+import dev.settlermind.mind.board.Board;
+import dev.settlermind.mind.board.BoardTask;
 import dev.settlermind.entity.SettlerEntity;
 import dev.settlermind.protection.ProtectionGuard;
 import dev.settlermind.skill.MineBlockSkill;
+import net.minecraft.command.CommandSource;
 import net.minecraft.command.argument.BlockPosArgumentType;
+import net.minecraft.command.argument.IdentifierArgumentType;
 import net.minecraft.entity.SpawnReason;
 import net.minecraft.item.ItemStack;
 import net.minecraft.registry.Registries;
@@ -22,18 +27,21 @@ import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.function.Consumer;
 
 import static net.minecraft.server.command.CommandManager.argument;
 import static net.minecraft.server.command.CommandManager.literal;
 
 /**
- * /settler (alias /sm) summon|list|status|follow|stay|mine|pause|resume|dismiss.
- * Only a settler's owner (or an operator) may control it.
+ * /settler (alias /sm) summon|list|status|follow|stay|mine|pause|resume|dismiss, plus the settlement
+ * board: board, task post|cancel. Only a settler's owner (or an operator) may control it; anyone may
+ * view the board and post; only the poster (or an operator) may cancel a task.
  */
 public final class SettlerCommands {
     private static final int MAX_SETTLERS_PER_OWNER = 4;
@@ -69,6 +77,16 @@ public final class SettlerCommands {
                 .then(literal("on").executes(c -> consent(c, true)))
                 .then(literal("off").executes(c -> consent(c, false)))
                 .executes(c -> consent(c, null)));
+
+        root.then(literal("board").executes(SettlerCommands::board));
+        root.then(literal("task")
+                .then(literal("post").then(argument("item", IdentifierArgumentType.identifier())
+                        .suggests((c, b) -> CommandSource.suggestIdentifiers(Registries.ITEM.getIds(), b))
+                        .then(argument("count", IntegerArgumentType.integer(Board.MIN_COUNT, Board.MAX_COUNT))
+                                .executes(c -> postTask(c, ""))
+                                .then(argument("note", StringArgumentType.greedyString())
+                                        .executes(c -> postTask(c, StringArgumentType.getString(c, "note")))))))
+                .then(literal("cancel").then(argument("id", StringArgumentType.word()).executes(SettlerCommands::cancelTask))));
 
         var node = d.register(root);
         d.register(literal("sm").redirect(node)); // short alias
@@ -179,6 +197,81 @@ public final class SettlerCommands {
                           : " (No AI provider is configured; nothing leaves this server.)");
         c.getSource().sendFeedback(() -> Text.literal(msg), false);
         return 1;
+    }
+
+    // ------------------------------------------------------------------ settlement board
+
+    private static int board(CommandContext<ServerCommandSource> c) {
+        MindHost host = MindHost.get();
+        if (host == null) return 0;
+        List<String> active = new ArrayList<>();
+        List<String> closed = new ArrayList<>();
+        for (BoardTask t : host.board().tasks()) (t.active() ? active : closed).add(describe(t));
+        StringBuilder sb = new StringBuilder("Settlement board");
+        if (active.isEmpty()) sb.append(": no open tasks. Post one with /settler task post <item> <count> [note]");
+        else sb.append(" (").append(active.size()).append(" open):");
+        for (String line : active) sb.append("\n ").append(line);
+        if (!closed.isEmpty()) {
+            sb.append("\nRecently closed:");
+            for (String line : closed.subList(Math.max(0, closed.size() - 5), closed.size())) sb.append("\n ").append(line);
+        }
+        String text = sb.toString();
+        c.getSource().sendFeedback(() -> Text.literal(text), false);
+        return active.size();
+    }
+
+    private static String describe(BoardTask t) {
+        String state = switch (t.status) {
+            case OPEN -> "open";
+            case CLAIMED -> "taken by " + t.claimant;
+            case DONE -> "done by " + t.claimant;
+            case CANCELLED -> "cancelled";
+        };
+        return t.id + ": gather " + t.count + " " + t.item + " for " + t.postedBy + " - " + state + ", " + t.progress + "/" + t.count
+                + (t.note == null || t.note.isEmpty() ? "" : " - \"" + t.note + "\"");
+    }
+
+    private static int postTask(CommandContext<ServerCommandSource> c, String rawNote) throws CommandSyntaxException {
+        ServerPlayerEntity p = c.getSource().getPlayerOrThrow();
+        MindHost host = MindHost.get();
+        if (host == null) return 0;
+        Identifier item = IdentifierArgumentType.getIdentifier(c, "item");
+        int count = IntegerArgumentType.getInteger(c, "count");
+        // Notes reach settlers' prompts: plain printable text only, bounded.
+        String note = rawNote.replaceAll("[\\p{Cntrl}\u00a7]", "").trim();
+        if (note.length() > Board.MAX_NOTE) note = note.substring(0, Board.MAX_NOTE);
+        Board.Result r = host.postTask(p.getGameProfile().getName(), item, count, note);
+        if (!r.ok()) throw new SimpleCommandExceptionType(Text.literal(boardError(r.code(), item.toString()))).create();
+        BoardTask t = r.task();
+        c.getSource().sendFeedback(() -> Text.literal("Posted " + t.id + ": gather " + t.count + " " + t.item
+                + ". Settlers can see it and may choose to take it. Cancel with /settler task cancel " + t.id), false);
+        return 1;
+    }
+
+    private static int cancelTask(CommandContext<ServerCommandSource> c) throws CommandSyntaxException {
+        MindHost host = MindHost.get();
+        if (host == null) return 0;
+        String id = StringArgumentType.getString(c, "id").toUpperCase(Locale.ROOT);
+        ServerPlayerEntity p = c.getSource().getPlayer();
+        String by = p != null ? p.getGameProfile().getName() : c.getSource().getName();
+        Board.Result r = host.cancelTask(id, by, c.getSource().hasPermissionLevel(2));
+        if (!r.ok()) throw new SimpleCommandExceptionType(Text.literal(boardError(r.code(), id))).create();
+        c.getSource().sendFeedback(() -> Text.literal("Cancelled " + r.task().id + " (gather " + r.task().count + " "
+                + r.task().item + ")."), false);
+        return 1;
+    }
+
+    private static String boardError(String code, String subject) {
+        return switch (code) {
+            case Board.INVALID_ITEM -> "There is no item called " + subject + ".";
+            case Board.INVALID_COUNT -> "The count must be from " + Board.MIN_COUNT + " to " + Board.MAX_COUNT + ".";
+            case Board.BOARD_FULL -> "The board is full (" + Board.MAX_ACTIVE_TASKS + " open tasks). Cancel or finish some first.";
+            case Board.TOO_MANY_POSTS -> "You already have " + Board.MAX_ACTIVE_POSTS_PER_POSTER + " open tasks on the board.";
+            case Board.NOT_FOUND -> "There is no task " + subject + " on the board. See /settler board.";
+            case Board.NOT_ALLOWED -> "Only whoever posted " + subject + " (or an operator) can cancel it.";
+            case Board.ALREADY_CLOSED -> "Task " + subject + " is already done or cancelled.";
+            default -> "The board refused that (" + code + ").";
+        };
     }
 
     private static void ok(CommandContext<ServerCommandSource> c, SettlerEntity s, String msg) {

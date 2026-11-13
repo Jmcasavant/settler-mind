@@ -2,6 +2,7 @@ package dev.settlermind.ai;
 
 import dev.settlermind.entity.SettlerEntity;
 import dev.settlermind.mind.Perception;
+import dev.settlermind.mind.board.Board;
 import net.minecraft.block.BlockState;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.ItemEntity;
@@ -15,6 +16,8 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.RaycastContext;
+import net.minecraft.world.World;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -35,7 +38,18 @@ public final class PerceptionBuilder {
 
     private PerceptionBuilder() {}
 
+    /** Board key for a block: "x,y,z" in the overworld, "dimension|x,y,z" elsewhere (one board per world save). */
+    public static String posKey(World world, BlockPos pos) {
+        String xyz = pos.getX() + "," + pos.getY() + "," + pos.getZ();
+        return world.getRegistryKey() == World.OVERWORLD ? xyz : world.getRegistryKey().getValue() + "|" + xyz;
+    }
+
     public static Perception build(SettlerEntity s) {
+        return build(s, null, 0);
+    }
+
+    /** @param board the settlement board (null: none), read at {@code boardNow} for views and reservations */
+    public static Perception build(SettlerEntity s, @Nullable Board board, long boardNow) {
         ServerWorld world = (ServerWorld) s.getWorld();
         BlockPos origin = s.getBlockPos();
         Vec3d eye = s.getEyePos();
@@ -50,8 +64,9 @@ public final class PerceptionBuilder {
                     BlockState state = world.getBlockState(p);
                     if (!notable(state)) continue;
                     if (!visible(world, s, eye, p)) continue;
+                    String reservedBy = board == null ? null : board.holder(posKey(world, p), boardNow);
                     blocks.add(new Perception.SeenBlock(Registries.BLOCK.getId(state.getBlock()).getPath(),
-                            p.getX(), p.getY(), p.getZ(), Math.sqrt(p.getSquaredDistance(eye))));
+                            p.getX(), p.getY(), p.getZ(), Math.sqrt(p.getSquaredDistance(eye)), reservedBy));
                 }
             }
         }
@@ -99,7 +114,8 @@ public final class PerceptionBuilder {
 
         return new Perception(world.getTime(), timeOfDay, weather,
                 new int[]{origin.getX(), origin.getY(), origin.getZ()}, s.getHealth(), s.getFoodLevel(), holding, inv,
-                s.describeActivity(), List.copyOf(blocks), List.copyOf(entities), List.of());
+                s.describeActivity(), List.copyOf(blocks), List.copyOf(entities),
+                board == null ? List.of() : board.views(s.getSettlerName(), boardNow));
     }
 
     /** Blocks worth mentioning: resources, crops, workstations, storage, beds. */

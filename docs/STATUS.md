@@ -27,7 +27,7 @@ Fabric Language Kotlin 1.13.14+kotlin.2.4.20 (runtime for the SDK; chosen becaus
   - **mind:** repeat suppression was not time-bounded, so a settler could never say the same thing
     twice, even an hour apart. It now uses a 1-minute window.
 
-**In-world game tests: 9/9 pass, 6 consecutive runs** (`./gradlew runGametest`, headless dedicated server)
+**In-world game tests: 11/11 pass, 4 consecutive runs** (the 9 below plus 2 board tests; the 9 had 6 earlier consecutive runs) (`./gradlew runGametest`, headless dedicated server)
 - Body: mining with verified pickup, best tool, stone by hand reported as PARTIAL, bedrock refused,
   block changed mid-mine detected, eating and food choice, save/load without duplication, dismissal
   without item loss.
@@ -36,6 +36,15 @@ Fabric Language Kotlin 1.13.14+kotlin.2.4.20 (runtime for the SDK; chosen becaus
   2. Decided (logged `<Tess> On it.`) and the plan passed validation.
   3. Mined and collected the log; the outcome was verified.
   4. Memories formed for what was heard, what it decided, and what it did. Affinity for the speaker rose.
+- **Settlement board in the world** (docs/BOARD.md, own game-test batch because the board is world-wide):
+  - Two settlers both hear "Name, anything on the board?" about Alex's "gather 2 oak_log". Both decide to
+    claim it from the same revision; exactly one claim succeeds and the other fails `not_open`
+    (logged `<Cal> Hm. That didn't work (not open).`). The claimant mines both logs. The task reaches DONE
+    with progress 2/2, credited only from verified `+n minecraft:oak_log` outcomes.
+  - A block reserved by one settler can't be mined by another (`FAILED(reserved)`). The reservation is
+    released after the verified mine.
+  - The board persists in the world save (`settlermind_minds.dat`, key `Board`): across runs of the
+    reused test world, task ids continued (T2, T3, T4…) and leftover tasks were loaded.
 
 **Build:** the mod jar nests 21 SDK runtime libraries. Kotlin comes from Fabric Language Kotlin, not bundled.
 
@@ -63,9 +72,13 @@ GitHub Actions runs the loader-pin check, unit tests and in-world game tests on 
   versions. Claims are fail-closed (settlers won't mine) until the Open Parties and Claims adapter exists.
 - Long runs: memory growth, reflection quality, cost per settler-hour.
 - Multiple settlers talking together over time (loop caps are unit-tested only).
+- Board in a real client:
+  - the `/settler board` and `/settler task post|cancel` commands (compiled; not run by a player yet);
+  - lease expiry notices in a live world (expiry itself is unit-tested);
+  - a settler posting tasks from a paid model.
 
 ## Next (see docs/MIND.md backlog)
 
 1. Live Claude eval run (needs a key): `./gradlew runEval -Peval="--provider claude --judge claude"` → fill docs/MODELS.md.
 2. More scenarios: multi-day memory drift, settler cooperation, repeated insults.
-3. Coordination board; danger preemption; `chat` route; local-model provider.
+3. Danger preemption; `chat` route; local-model provider.
