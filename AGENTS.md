@@ -15,6 +15,8 @@ act with. Do not keep polishing bot primitives at the expense of the mind. Befor
 **Build the harness, not the behaviour** (owner direction, 2026-11-13). Settlers should have open-ended
 autonomy: what they do should come from their own goals, beliefs and personality, not from features
 we script. So:
+- The aim is settlers who think freely and develop their own systems (conventions, agreements, roles,
+  traditions), not settlers who run ours. The harness supplies raw material; they decide what to build.
 - Never hard-code a behaviour such as "when a player joins, greet them" or "leave a note at a friend's
   home". Give the mind general means instead: events it can perceive, actions it can combine, beliefs it
   can form. Then let it decide.

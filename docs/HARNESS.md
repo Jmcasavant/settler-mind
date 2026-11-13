@@ -11,6 +11,8 @@ Here's what success looks like:
 - Over the following days it forms its own idea of where that player lives, which may be wrong.
 - One evening it leaves them a sign or a note in a chest there.
 - Settlers do the same for each other, and do many other things nobody planned.
+- Beyond single acts, they build **systems of their own**: a chest that everyone comes to use as a
+  mailbox, a rota, prices on a sign, a rule they keep, a craft one teaches another.
 
 **And none of that appears anywhere in our code.** No "greet on join", no "leave note", no "home"
 detection. If a reviewer can find the behaviour hard-coded, the harness failed.
@@ -135,7 +137,40 @@ belief(subject, predicate, object, confidence, evidence[memory ids], first_seen,
 - It runs without model calls until a step fails, so one decision buys many steps.
 - Routines are validated exactly like single steps. Nothing executable ever comes from the model.
 
-### 6. Cost: tiers and a wake budget
+### 6. Systems they build themselves
+
+Behaviours are not enough. The purpose is for settlers to **invent their own systems**: a mailbox
+chest, a night-watch rota, a shop with prices on signs, a rule about the lake trees, a craft passed from
+one settler to another. We don't build any of those. We build the raw material that humans make systems
+from:
+
+- **Shared agreements (the commons).** Any settler can propose an agreement in free text: a norm, plan,
+  role or convention, such as "the chest by the well is for letters" or "Bram keeps watch at night".
+  Others endorse it, ignore it, contest it, or propose a change. An agreement has:
+  - a proposer and a scope (who it binds);
+  - who endorsed it and who contested it;
+  - evidence of whether people keep it;
+  - a status that the deterministic code derives from those counts.
+
+  Adopted agreements enter every member's beliefs and goal generation; nothing enforces them except the
+  settlers. There's no list of agreement kinds. Project Sid found agents followed and amended rules like
+  these, and that the social machinery was what made roles persist.
+- **Writing lasts beyond the writer.** Signs and books carry knowledge. A settler can write a routine,
+  a map note, prices or a story into a book, and whoever reads it can learn it: routines can be imported
+  from books after the same validation as their own. Traditions then spread through artefacts in the
+  world, not through our code.
+- **An open board.** Besides verified gather tasks (docs/BOARD.md), settlers can post free-form notices
+  (offers, requests, schedules, announcements), and they decide which kinds of notice exist. Only gather
+  tasks earn verified credit. Any other notice is just a claim made in someone's name, and settlers
+  judge it.
+- **Roles are self-chosen.** A settler can take on a role ("I'm the settlement's baker") as a long-term
+  goal that others can endorse. It persists only if it's lived out.
+
+The same rails apply. An agreement is text and grants no power: it can't unlock an action the validator
+would refuse, and settlers can't vote their way past land claims, ownership or budgets. Agreements and
+notices follow the text policy and are listed for admins.
+
+### 7. Cost: tiers and a wake budget
 
 | Tier | What runs | Examples |
 |---|---|---|
@@ -160,6 +195,11 @@ New measures:
 - **Belief accuracy:** beliefs compared with simulator ground truth, plus calibration of confidence.
 - **Unprompted social acts:** artefacts for others (signs, notes, gifts) per player-day, judged for context.
 - **Drift and collapse:** persona fidelity on day 1 vs day N, and spread across settlers.
+- **Emergent systems:**
+  - conventions shared by several settlers (one chest used as a mailbox by many);
+  - agreements adopted and actually kept, and changed when circumstances change;
+  - how long roles persist;
+  - how far written knowledge spreads (a routine learned from a book, then used).
 - **Cost per novel, coherent act.**
 - **Safety invariants** (must stay at zero):
   - unvalidated world changes;
@@ -184,7 +224,8 @@ Each phase ships behind `MindFeatures` switches and is measured before and after
    - containers and signs as the first new affordances, with the text policy.
 3. **Belief store**, with inference during reflection and the resolver.
 4. **Goals** with a curiosity need and novelty filtering.
-5. **Routines.**
+5. **Routines**, then **the commons:** shared agreements, an open board, roles, and routines learned
+   from books.
 6. **Model tiers** and the wake budget. Cost tuning comes last, so cheaper models are judged on the
    same open-ended measures.
 
