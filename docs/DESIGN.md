@@ -12,7 +12,7 @@ Independent of `minecraft-civ-lab`: no shared protocol, schemas or code.
 | **Reflexes beat skills** | Eating (and later fleeing) pre-empts the active skill, with no LLM involved. |
 | **Protection fails closed** | If a known claims mod is installed and we have no verified adapter, settlers refuse to change blocks (`claims_adapter_missing`). |
 | **In-flight work after a restart is `UNCERTAIN`** | The settler re-observes; it never assumes the work completed. |
-| **LLM (next phase) sets goals and talks; never acts directly** | It emits a closed plan schema (`{reason, goal, steps[]}`) using only registered skill kinds. A Java validator checks it, owner and claim rules included. Commands, op, shell and URLs don't exist as tools. |
+| **The LLM sets goals and talks; it never acts directly** (see MIND.md) | It emits a closed plan schema (`{reason, goal, steps[]}`) using only registered skill kinds. A Java validator checks it, owner and claim rules included. Commands, op, shell and URLs don't exist as tools. |
 | **Everything in one JVM; memory in the world save** | No sidecar process. Backups and rollbacks keep memory consistent with the world. |
 
 ## Ideas adopted from the 2026-11 survey of AI mods

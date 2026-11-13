@@ -4,3 +4,5 @@ run/
 out/
 *.iml
 .idea/
+.env
+.claude/worktrees/

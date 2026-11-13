@@ -1,0 +1,76 @@
+package dev.settlermind.ai;
+
+import com.google.gson.Gson;
+import dev.settlermind.SettlerMind;
+import dev.settlermind.mind.Mind;
+import dev.settlermind.mind.board.Board;
+import net.minecraft.nbt.NbtCompound;
+import net.minecraft.world.PersistentState;
+
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+
+/**
+ * Minds, chat-consent choices and the settlement task board, stored in the world save
+ * ({@code data/settlermind_minds.dat}) so backups and rollbacks keep them consistent with
+ * the world. Minds are serialised as JSON strings to keep the mind package engine-free.
+ */
+public final class MindStore extends PersistentState {
+    static final String ID = "settlermind_minds";
+    private static final Gson GSON = new Gson();
+
+    final Map<UUID, Mind> minds = new LinkedHashMap<>();
+    final Set<UUID> chatConsent = new HashSet<>();
+    Board board = new Board();
+
+    public static MindStore fromNbt(NbtCompound nbt) {
+        MindStore s = new MindStore();
+        NbtCompound m = nbt.getCompound("Minds");
+        for (String key : m.getKeys()) {
+            try {
+                Mind.Saved saved = GSON.fromJson(m.getString(key), Mind.Saved.class);
+                s.minds.put(UUID.fromString(key), Mind.load(saved));
+            } catch (RuntimeException e) {
+                // A corrupt mind must not take the world down; the settler starts fresh.
+                SettlerMind.LOG.error("Could not load mind {}; it will be recreated", key, e);
+            }
+        }
+        for (String key : nbt.getCompound("Consent").getKeys()) {
+            try {
+                s.chatConsent.add(UUID.fromString(key));
+            } catch (IllegalArgumentException ignored) { }
+        }
+        if (nbt.contains("Board")) {
+            try {
+                s.board = Board.load(GSON.fromJson(nbt.getString("Board"), Board.Saved.class));
+            } catch (RuntimeException e) {
+                // A corrupt board must not take the world down; the settlement starts with an empty one.
+                SettlerMind.LOG.error("Could not load the settlement board; starting an empty one", e);
+                s.board = new Board();
+            }
+        }
+        return s;
+    }
+
+    @Override
+    public NbtCompound writeNbt(NbtCompound nbt) {
+        NbtCompound m = new NbtCompound();
+        minds.forEach((id, mind) -> m.putString(id.toString(), GSON.toJson(mind.save())));
+        nbt.put("Minds", m);
+        NbtCompound c = new NbtCompound();
+        chatConsent.forEach(id -> c.putBoolean(id.toString(), true));
+        nbt.put("Consent", c);
+        nbt.putString("Board", GSON.toJson(board.save()));
+        nbt.putInt("Version", 1);
+        return nbt;
+    }
+
+    /** Minds change constantly; always save them with the world. */
+    @Override
+    public boolean isDirty() {
+        return true;
+    }
+}
