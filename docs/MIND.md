@@ -59,6 +59,21 @@ CoALA mapping (2309.02427):
 8. Saved routines: verified compositions of catalog steps (Voyager-style skill library, but no generated code).
 9. Settlement-level culture: shared norms, roles, elections. Only once individuals are convincing.
 
+## Owner direction: settlers with a life of their own (2026-11-13)
+
+The owner wants settlers to have free will: to do what they want, without an end to what they might do.
+The example: a player joins and the settlers recognise them. One settler leaves a sign, or a note in a
+chest, where it *thinks* that player lives. Settlers do the same for each other.
+
+These are **examples of what should emerge, not features to build** (AGENTS.md, "Build the harness,
+not the behaviour"). Nothing here gets a hand-written trigger or a single-purpose action. The harness
+has to give settlers general ways to perceive, act and form beliefs, so that this and much else can
+happen on their own initiative.
+
+The harness design is docs/HARNESS.md (draft for owner review). It covers the action surface, event
+perception, belief store, self-directed goals, skill learning, cost, and how to evaluate open-ended
+behaviour. It's based on the research survey docs/research/2026-11-open-ended-harness.md.
+
 ## Evaluation
 
 Implemented in the eval harness: see **docs/EVAL.md**. The methods are:

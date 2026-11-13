@@ -5,6 +5,13 @@ decisions are marked **[approved]**; the rest were made by the agent under the w
 
 ## 2026-11-13
 
+- **Direction: settlers with a life of their own** [approved, owner]. Settlers recognise players who
+  join, form beliefs about where people live, and can leave signs and notes for players and each other.
+  Freedom comes from choosing goals within a growing, validated action catalog (AGENTS.md rule 1 stands).
+  The owner then sharpened this into **build the harness, not the behaviour**: no scripted triggers or
+  single-purpose features; general perception, actions and beliefs that the mind combines. Recorded in
+  AGENTS.md and docs/MIND.md; the design follows a research survey. *Revert:* AGENTS.md section.
+
 - **First paid eval run** [approved: 200-call cap, about $5–8]. Spent $2.82 estimated; see docs/MODELS.md
   "Measured" and docs/EVAL.md "First Claude run". No model choice changes yet: the scenarios that matter
   most (cooperation, grounding) didn't run, and 11.7% of calls failed for an unrecorded reason. Next:

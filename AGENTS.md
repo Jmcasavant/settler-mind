@@ -12,6 +12,20 @@ gossip, reflect and learn from failure. Minecraft (Fabric 1.20.1) is the first h
 act with. Do not keep polishing bot primitives at the expense of the mind. Before adding a skill, ask:
 "What does this let a settler *decide, express or learn* that it couldn't before?" If nothing, don't.
 
+**Build the harness, not the behaviour** (owner direction, 2026-11-13). Settlers should have open-ended
+autonomy: what they do should come from their own goals, beliefs and personality, not from features
+we script. So:
+- Never hard-code a behaviour such as "when a player joins, greet them" or "leave a note at a friend's
+  home". Give the mind general means instead: events it can perceive, actions it can combine, beliefs it
+  can form. Then let it decide.
+- Prefer general capabilities over feature-specific ones. A new perception, action or memory type should
+  serve many behaviours we haven't thought of. If it serves only one, rethink it.
+- Freedom happens inside the safety rails. Rule 1 below stands: every action is validated and the claim
+  guard fails closed. The safety boundary is the closed set of *kinds* of world interaction, and it
+  grows deliberately.
+- Measure open-endedness, not only scripted pass/fail: diversity, coherence over long runs, and what
+  emerges (docs/EVAL.md). The harness design is docs/HARNESS.md (draft for owner review).
+
 ## Working agreement: who decides what
 
 The agent leads day-to-day. The owner reviews and approves where it matters. Everything stays in
@@ -61,6 +75,7 @@ renaming would need a migration or settlers would vanish.
 | `src/test/java/...` | JUnit tests for the mind (no Minecraft needed). |
 | `src/main/java/dev/settlermind/gametest/` | In-world tests on a headless server. |
 | `docs/MIND.md` | Mind architecture and the research it's based on. Read before changing the mind. |
+| `docs/HARNESS.md` | The open-ended harness design: event bus, generic verbs over affordances, beliefs, goals, routines, open-endedness evals. Read before adding any perception, action or memory type. |
 | `docs/MODELS.md` | Model and cost strategy. Read before touching providers or routes. |
 | `docs/EVAL.md`, `src/test/java/dev/settlermind/eval/` | Evaluation harness: simulated world, scenarios, ablations, judged interviews, cost. |
 | `docs/STATUS.md` | What is verified and what isn't. Keep it honest and current. |
