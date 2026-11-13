@@ -60,6 +60,14 @@ Fabric Language Kotlin 1.13.14+kotlin.2.4.20 (runtime for the SDK; chosen becaus
   different Mixin), causing flaky startup and risking Homestead compatibility. Pinned FLK 1.13.14,
   which needs only loader 0.16.9.
 
+## Test isolation fix (2026-11-13)
+
+The in-world tests had been reusing the saved test world between runs, so settler minds and the board
+leaked from one run to the next. Earlier green runs were partly on stale state. After the review fixes
+added a post rate limit, this showed up as a failure (`rate_limited` from a previous run's post).
+Every `runGametest` now deletes the test world first (proven with a stale marker file). Result: 3
+consecutive full builds green, 63 unit + 11 in-world tests.
+
 ## CI
 
 GitHub Actions runs the loader-pin check, unit tests and in-world game tests on every PR and push to main.

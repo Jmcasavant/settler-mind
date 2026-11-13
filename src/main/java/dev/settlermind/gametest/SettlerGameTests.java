@@ -240,8 +240,9 @@ public final class SettlerGameTests implements FabricGameTest {
         Board board = host.board();
         long now = ctx.getWorld().getTime();
         for (BoardTask t : List.copyOf(board.tasks())) if (t.active()) board.cancel(t.id, null, null, true, now); // leftovers
-        BoardTask task = board.post("gametest-alex", BoardTask.KIND_PLAYER, "Alex", "oak_log", 2, "for the fence", now).task();
-        if (task == null) throw new GameTestException("could not post");
+        Board.Result posted = board.post("gametest-alex", BoardTask.KIND_PLAYER, "Alex", "oak_log", 2, "for the fence", now);
+        BoardTask task = posted.task();
+        if (task == null) throw new GameTestException("could not post: " + posted.code() + " at tick " + now + ", lastPost=" + board.save().lastPost);
         BlockPos log1 = new BlockPos(4, 1, 3), log2 = new BlockPos(5, 1, 5);
         ctx.setBlockState(log1, Blocks.OAK_LOG);
         ctx.setBlockState(log2, Blocks.OAK_LOG);

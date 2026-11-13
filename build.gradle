@@ -94,6 +94,14 @@ java {
 
 jar { from("LICENSE") { rename { "${it}_${project.base.archivesName.get()}" } } }
 
+// Every game-test run starts from a fresh world, so tests never depend on a previous run's saved state.
+def gametestWorld = file('build/gametest/world')
+tasks.matching { it.name == 'runGametest' }.configureEach {
+    doFirst {
+        if (gametestWorld.exists() && !gametestWorld.deleteDir()) throw new GradleException("Could not delete ${gametestWorld}")
+    }
+}
+
 // Run game tests as part of `check`.
 check.dependsOn("runGametest")
 
