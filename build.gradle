@@ -97,6 +97,24 @@ jar { from("LICENSE") { rename { "${it}_${project.base.archivesName.get()}" } } 
 // Run game tests as part of `check`.
 check.dependsOn("runGametest")
 
+// Local secrets: a git-ignored .env (see .env.example) is loaded into every Java run task
+// (runEval, runClient, runServer, runGametest). Real environment variables win. Values are never logged.
+def dotenv = [:]
+def envFile = file('.env')
+if (envFile.exists()) {
+    envFile.eachLine { String line ->
+        line = line.trim()
+        int eq = line.indexOf('=')
+        if (line && !line.startsWith('#') && eq > 0) {
+            String value = line.substring(eq + 1).trim().replaceAll(/^["']|["']$/, '')
+            if (value) dotenv[line.substring(0, eq).trim()] = value
+        }
+    }
+}
+tasks.withType(JavaExec).configureEach { task ->
+    dotenv.each { k, v -> if (System.getenv(k) == null) task.environment(k, v) }
+}
+
 // Evaluation harness (docs/EVAL.md). Free by default; pass options with -Peval="...".
 tasks.register('runEval', JavaExec) {
     group = 'verification'

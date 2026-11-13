@@ -138,7 +138,10 @@ public final class EvalRunner {
         if (name.equals("scripted")) return new ScriptedCognition();
         if (name.equals("claude")) {
             String key = System.getenv("ANTHROPIC_API_KEY");
-            if (key == null || key.isBlank()) throw new IllegalStateException("ANTHROPIC_API_KEY is not set");
+            if (key == null || key.isBlank()) {
+                throw new IllegalStateException("ANTHROPIC_API_KEY is not set (export it, or put it in .env; see .env.example)");
+            }
+            System.out.println("Claude provider: ANTHROPIC_API_KEY is set (" + key.length() + " chars; value not shown)");
             return new ClaudeCognition(key, Duration.ofSeconds(60), true, executor);
         }
         throw new IllegalArgumentException("unknown provider " + name);

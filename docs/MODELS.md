@@ -17,7 +17,8 @@ from measurements, and revisited as the game, the prompts and the model market c
 
 - **Config, not code.** `config/settlermind.json` → `routes`. Change a route's model and restart; no rebuild.
 - **Providers.** `scripted` (offline, free) and `claude` (official Anthropic Java SDK, key from the
-  `ANTHROPIC_API_KEY` env var). A local-model provider (Ollama/LM Studio) is a planned addition behind
+  `ANTHROPIC_API_KEY` env var; for local Gradle runs a git-ignored `.env` is loaded, see `.env.example`).
+  Use a real API key, not a subscription CLI login: the lab's plan-login route has terms and cost-tracking caveats. A local-model provider (Ollama/LM Studio) is a planned addition behind
   the same `Cognition` interface.
 - **Measurement.** `/settler usage` shows per route and model: calls, failures, input/output tokens, cache
   reads, average latency, estimated USD (prices in config; update them when they change).

@@ -35,8 +35,9 @@ Players need the mod installed on the client too (custom entity).
 ## AI configuration
 
 `config/settlermind.json` is created on first start. By default every route uses the free, offline
-`scripted` mind. To use Claude, set `"provider": "claude"` on a route and export `ANTHROPIC_API_KEY`
-before starting the server. Budgets cap calls and estimated spend; when a cap is reached, settlers fall
+`scripted` mind. To use Claude, set `"provider": "claude"` on a route and provide `ANTHROPIC_API_KEY`: export it on the
+server host, or for local dev runs (`runClient`, `runServer`, `runEval`) put it in a git-ignored `.env`
+(`cp .env.example .env`; same convention as minecraft-civ-lab, so you can copy the key from there). Budgets cap calls and estimated spend; when a cap is reached, settlers fall
 back to the scripted mind. See `docs/MODELS.md`.
 
 See `docs/MIND.md` for how settlers think, `docs/DESIGN.md` for the architecture and `docs/STATUS.md` for what is verified.

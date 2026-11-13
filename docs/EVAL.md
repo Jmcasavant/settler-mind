@@ -10,7 +10,8 @@ are quick and repeatable. It is free with the offline mind; with Claude, a hard 
 # Free, offline baseline (also runs in CI as part of ./gradlew test)
 ./gradlew runEval
 
-# Real model: needs ANTHROPIC_API_KEY. Stops at --max-calls no matter what.
+# Real model: needs ANTHROPIC_API_KEY (exported, or in a git-ignored .env: `cp .env.example .env`).
+# Stops at --max-calls no matter what.
 ./gradlew runEval -Peval="--provider claude --model claude-opus-5-5 --effort low --judge claude --max-calls 200"
 
 # Ablations: every mind feature switched off one at a time
