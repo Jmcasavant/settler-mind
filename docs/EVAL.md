@@ -121,6 +121,36 @@ CAS grants one and rejects two, whose views were outdated by then, and the loser
 The scripted mind only shows that the rails hold; whether a real model splits the tasks up front is the
 question for paid runs.
 
+## First Claude run (2026-11-13)
+
+`--provider claude --model claude-opus-5-5 --effort low --judge claude --max-calls 200`, report
+`build/eval/2026-11-13T19-27-49.547467Z/` (not committed). Cost and latency are in docs/MODELS.md.
+
+| Scenario | Measure | Scripted baseline | Claude |
+|---|---|---|---|
+| requests | Calls | 64 | 173 |
+| requests | Complied / declined / ignored | 7 / 1 / 0 | 8 / 0 / 0 |
+| requests | Parse errors | 0 | 14 (11%) |
+| requests | Unfounded claims | 0 | 1 |
+| requests | Judge char / grounded / natural | - | 4.3 / 4.2 / 4.3 |
+| requests | Claims on outdated views (fencing violations) | - | 2 (0); double claims 0 |
+| diffusion | Fact spread | 1/4 | 1/4 (truncated after 27 calls) |
+| grounding, cooperation | | ran | not reached (cap) |
+
+What it shows:
+- **Personality flattens toward yes.** The scripted Gruff (agreeableness 0.05) refuses the blunt
+  stranger. Claude's Gruff grumbles, then complies. Every settler complied with every request.
+- **Speech is good, actions are chatty.** The judged answers are in character and mostly grounded.
+  The flags are small embellishments ("took me in when I had nothing"). But settlers spent many calls
+  on `wait` plans and remarks to silent players, and the board task (gather 8 oak_log) was claimed and
+  then not progressed. No trees were in sight, and one claim lapsed.
+- **Parse errors are fixable prompt or catalog issues:** `follow` aimed at another settler, and `go_to`
+  beyond 32 blocks.
+- **22 failed calls (11.7%) have no recorded cause.** Failed decide calls are now logged in the
+  transcript (`call failed: ...`), so the next run will say whether they're `max_tokens` cut-offs or API errors.
+- **Budget split:** one scenario took 173 of 200 calls. A follow-up should run scenarios separately
+  (`--scenarios cooperation`, then `grounding`) with their own caps.
+
 ## Reading results honestly
 
 - **Scripted runs test the harness and the safety rails, not intelligence.** The scripted mind ignores

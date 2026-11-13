@@ -39,9 +39,23 @@ Candidates to evaluate per route (prices per million tokens, input/output, as of
 | `claude-sonnet-5-5` | 2 / 10 | Mid tier |
 | `claude-haiku-5-5` | 0.10 / 0.50 | Very cheap; candidate for `decide` chatter and `reflect`/`summarize` if quality holds |
 
-**Rough sizing (assumptions, not measurements).** One `decide` call ≈ 2–3k input tokens (system prompt
-cached) + ~300 output. With ~20 calls per settler-hour, 4 settlers ≈ 80 calls/h. Real numbers come
-from `/settler usage`; replace this paragraph with measured figures.
+**Measured (2026-11-13, eval harness, `claude-opus-5-5`, effort low, 200-call cap; report
+`build/eval/2026-11-13T19-27-49.547467Z/`).** Requests and diffusion (truncated) only; the cap ran out
+before grounding and cooperation.
+
+| Measure | Value |
+|---|---|
+| `decide` calls | 188, of which 22 failed (11.7%; cause not recorded by that build, see below) |
+| Cost per `decide` call | $0.0110 (per successful call $0.0125), at the price table above |
+| Tokens per `decide` call | ≈ 1.2k uncached input + 2.2k cache read (≈ 64% of input cached) + 256 output |
+| Mean `decide` latency | 4.2 s (p50/p95 not recorded yet) |
+| Parse errors | 14 of 149 decisions (9.4%): `follow` on a settler instead of a player, `go_to` beyond 32 blocks |
+| Unfounded claims | 1 |
+| Judge (character / grounded / natural, 1–5) | 4.3 / 4.2 / 4.3 over 20 interview answers; 3 were "(no answer)" |
+| Run total | $2.82 estimated ($2.07 decide, $0.60 judge, $0.15 plan + reflect), 14.5 min |
+
+Projection, not a measurement: at ~20 decide calls per settler-hour, 4 settlers on this route cost
+≈ $0.90 an hour. The 200-call cap counts settler calls only; the judge's 20 calls came on top.
 
 ## How to decide (and re-decide)
 

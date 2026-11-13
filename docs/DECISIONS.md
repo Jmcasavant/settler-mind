@@ -5,6 +5,13 @@ decisions are marked **[approved]**; the rest were made by the agent under the w
 
 ## 2026-11-13
 
+- **First paid eval run** [approved: 200-call cap, about $5–8]. Spent $2.82 estimated; see docs/MODELS.md
+  "Measured" and docs/EVAL.md "First Claude run". No model choice changes yet: the scenarios that matter
+  most (cooperation, grounding) didn't run, and 11.7% of calls failed for an unrecorded reason. Next:
+  log failures (done), then run cooperation and grounding with separate caps (needs a new approval).
+  Candidate mind work from it: requests flatten toward compliance (agreeableness isn't respected), and
+  settlers wait and chatter instead of acting. *Revert:* docs only.
+
 - **Board review phase B (host) and C (eval sim)** done locally after the cloud session's work did not
   arrive; docs/reviews/2026-11-13-board-review.md "Fix status". Choices made:
   - Mining credit is capped per item at what the break's own item entities held. *Alternative:* follow

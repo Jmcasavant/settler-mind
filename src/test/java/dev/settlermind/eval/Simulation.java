@@ -307,6 +307,8 @@ public final class Simulation {
         CognitionResult res = providerForRoute.apply(req.route()).complete(req, route).join();
         ledger.record(req.route(), res);
         metrics.call(req.route(), res);
+        // Failed decide calls are otherwise invisible in the report (other routes log errors in resolve()).
+        if (!res.ok() && req.route().equals("decide")) log.add(new LogLine(tick, a.name, req.route(), "call failed: " + res.error()));
         if (res.ok() && req.route().equals("decide")) {
             DecisionParser.Result parsed = DecisionParser.parse(res.text(), req.perception(), a.mind.features());
             metrics.parsed(parsed);
