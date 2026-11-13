@@ -19,6 +19,7 @@ import dev.settlermind.mind.cognition.RouteConfig;
 import dev.settlermind.mind.cognition.ScriptedCognition;
 import dev.settlermind.mind.cognition.UsageLedger;
 import dev.settlermind.skill.Outcome;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.message.v1.ServerMessageEvents;
@@ -89,6 +90,8 @@ public final class MindHost implements SettlerEvents {
             t.setDaemon(true);
             return t;
         });
+        // Mining in progress is not saved, so reservations in the save are leftovers (review finding 9).
+        store.board.clearReservations();
         providers.put("scripted", scripted);
         boolean wantsClaude = config.routes.values().stream().anyMatch(r -> r.provider().equals("claude"));
         if (wantsClaude) {
@@ -118,6 +121,10 @@ public final class MindHost implements SettlerEvents {
             if (instance == null) return;
             if (server.getTicks() % THINK_EVERY_TICKS == 0) instance.tick();
             if (server.getTicks() % BOARD_UPKEEP_TICKS == 0) instance.boardUpkeep();
+        });
+        // Every way out of a world (death, unload, dimension change, dismissal) unloads the entity.
+        ServerEntityEvents.ENTITY_UNLOAD.register((entity, world) -> {
+            if (instance != null && entity instanceof SettlerEntity s) instance.onRemoved(s);
         });
         ServerMessageEvents.CHAT_MESSAGE.register((message, sender, params) -> {
             if (instance != null) instance.onPlayerChat(sender, message.getContent().getString());
@@ -154,7 +161,7 @@ public final class MindHost implements SettlerEvents {
             lastBusyTick.put(id, now);
         }
 
-        CognitionRequest req = mind.nextRequest(now, () -> PerceptionBuilder.build(s, store.board, boardNow()));
+        CognitionRequest req = mind.nextRequest(now, () -> PerceptionBuilder.build(s, store.board, boardNow(), this::noteShareable));
         if (req == null) return;
         RouteConfig route = config.route(req.route());
         Cognition cognition = choose(id, route);
@@ -267,6 +274,12 @@ public final class MindHost implements SettlerEvents {
         if ("mine".equals(step.kind()) && outcome.status() == Outcome.Status.SUCCEEDED) creditGathering(s, outcome.detail());
     }
 
+    /** The settler left its world: whatever it was working on is abandoned. */
+    private void onRemoved(SettlerEntity s) {
+        // Claims survive (an unloaded settler may come back; abandoned claims lapse), reservations don't.
+        store.board.releaseAll(s.getUuid().toString());
+    }
+
     @Override
     public void onHurt(SettlerEntity s, String attacker, float amount) {
         mindFor(s).observe(new MindEvent.Hurt(attacker, amount), s.getWorld().getTime());
@@ -312,7 +325,7 @@ public final class MindHost implements SettlerEvents {
                     return Outcome.fail(Board.INVALID_ITEM, "no such item: " + step.item());
                 }
                 r = store.board.post(sid, BoardTask.KIND_SETTLER, name, step.item(), step.count() == null ? 0 : step.count(), null, now);
-                if (r.ok()) announce(r.task().id + ": " + name + " asks for " + r.task().count + " " + r.task().item);
+                if (r.ok()) announce(s, r.task().id + ": " + name + " asks for " + r.task().count + " " + r.task().item);
             }
             case "claim_task" -> {
                 String id = step.task() == null ? "" : step.task().trim().toUpperCase(Locale.ROOT);
@@ -395,17 +408,29 @@ public final class MindHost implements SettlerEvents {
     public Board.Result postTask(UUID playerId, String player, Identifier item, int count, String note) {
         if (!Registries.ITEM.containsId(item) || Registries.ITEM.get(item) == Items.AIR) return new Board.Result(Board.INVALID_ITEM, null);
         Board.Result r = store.board.post(playerId.toString(), BoardTask.KIND_PLAYER, player, item.toString(), count, note, boardNow());
-        if (r.ok()) announce(r.task().id + ": " + player + " asks for " + r.task().count + " " + r.task().item
+        if (r.ok()) announce(null, r.task().id + ": " + player + " asks for " + r.task().count + " " + r.task().item
                 + (r.task().note.isEmpty() ? "" : " (\"" + r.task().note + "\")"));
         return r;
     }
 
-    /** Cancel a task (command): poster or admin. Tells the claimant, if any. */
+    /**
+     * Cancel a task (command): the poster, the owner of the settler that posted it, or an admin. Tells the
+     * claimant, if any. An owner can cancel only while the settler is loaded (its owner is known only from
+     * the entity), otherwise it fails closed; the task still expires on its own.
+     */
     public Board.Result cancelTask(String id, @Nullable UUID byId, String by, boolean admin) {
         BoardTask before = store.board.task(id == null ? null : id.trim().toUpperCase(Locale.ROOT));
         String claimant = before == null ? null : before.claimantId;
-        Board.Result r = store.board.cancel(before == null ? id : before.id, byId == null ? null : byId.toString(),
-                BoardTask.KIND_PLAYER, admin, boardNow());
+        String cancelId = byId == null ? null : byId.toString();
+        String cancelKind = BoardTask.KIND_PLAYER;
+        if (before != null && byId != null && BoardTask.KIND_SETTLER.equals(before.posterKind)) {
+            SettlerEntity poster = findById(before.posterId);
+            if (poster != null && byId.equals(poster.getOwnerUuid())) {
+                cancelId = before.posterId; // the owner acts for their settler
+                cancelKind = BoardTask.KIND_SETTLER;
+            }
+        }
+        Board.Result r = store.board.cancel(before == null ? id : before.id, cancelId, cancelKind, admin, boardNow());
         if (r.ok() && claimant != null) {
             SettlerEntity c = findById(claimant);
             if (c != null) {
@@ -423,11 +448,35 @@ public final class MindHost implements SettlerEvents {
         return id != null && Registries.ITEM.containsId(id) && Registries.ITEM.get(id) != Items.AIR;
     }
 
-    /** New posts are public settlement news: tell every online player. */
-    private void announce(String text) {
-        Text line = Text.literal("[Board] ").formatted(Formatting.AQUA).append(Text.literal(text).formatted(Formatting.WHITE));
-        for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) p.sendMessage(line, false);
+    /**
+     * New posts are settlement news. Who hears them is {@code boardAnnouncements} in the config: "all" online
+     * players (default), "nearby" (players within hearing range of a posting settler, plus its owner; player
+     * posts are confirmed to the poster by the command), or "off".
+     */
+    private void announce(@Nullable SettlerEntity poster, String text) {
         SettlerMind.LOG.info("[Board] {}", text);
+        String mode = config.boardAnnouncements == null ? "all" : config.boardAnnouncements.toLowerCase(Locale.ROOT);
+        if (mode.equals("off")) return;
+        Text line = Text.literal("[Board] ").formatted(Formatting.AQUA).append(Text.literal(text).formatted(Formatting.WHITE));
+        double r2 = (double) config.hearingRadius * config.hearingRadius;
+        for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) {
+            boolean tell = !mode.equals("nearby") || (poster != null && (p.getUuid().equals(poster.getOwnerUuid())
+                    || (p.getWorld() == poster.getWorld() && p.squaredDistanceTo(poster) <= r2)));
+            if (tell) p.sendMessage(line, false);
+        }
+    }
+
+    /**
+     * Whether a task's note may go into settlers' prompts (review finding 2). Mirrors chat: a player's words
+     * reach a remote model only after {@code /settler consent on}. With no remote provider configured, or
+     * consent not required, every note is shown. Settler posts carry no note.
+     */
+    boolean noteShareable(BoardTask t) {
+        if (t.note == null || t.note.isEmpty()) return true;
+        if (!config.requireChatConsent || !config.anyRemoteProvider()) return true;
+        if (!BoardTask.KIND_PLAYER.equals(t.posterKind)) return false;
+        UUID poster = parseUuid(t.posterId);
+        return poster != null && store.chatConsent.contains(poster);
     }
 
     private void notifyPoster(BoardTask t, String text) {

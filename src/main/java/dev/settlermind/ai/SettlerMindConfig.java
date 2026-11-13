@@ -35,6 +35,8 @@ public final class SettlerMindConfig {
     public int idleThinkSeconds = 90;
     /** When a remote provider is configured, players must opt in before their chat is sent to it. */
     public boolean requireChatConsent = true;
+    /** Who is told about new board posts: "all" online players, "nearby" (see MindHost.announce) or "off". */
+    public String boardAnnouncements = "all";
 
     public static final class Claude {
         /** Environment variable holding the API key; the key itself is never stored in config. */

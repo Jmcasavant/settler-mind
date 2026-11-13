@@ -45,11 +45,15 @@ public final class PerceptionBuilder {
     }
 
     public static Perception build(SettlerEntity s) {
-        return build(s, null, 0);
+        return build(s, null, 0, null);
     }
 
-    /** @param board the settlement board (null: none), read at {@code boardNow} for views and reservations */
-    public static Perception build(SettlerEntity s, @Nullable Board board, long boardNow) {
+    /**
+     * @param board       the settlement board (null: none), read at {@code boardNow} for views and reservations
+     * @param noteVisible which tasks' notes this settler may see (the host's consent gate); null hides every note
+     */
+    public static Perception build(SettlerEntity s, @Nullable Board board, long boardNow,
+                                   @Nullable java.util.function.Predicate<dev.settlermind.mind.board.BoardTask> noteVisible) {
         ServerWorld world = (ServerWorld) s.getWorld();
         BlockPos origin = s.getBlockPos();
         Vec3d eye = s.getEyePos();
@@ -121,7 +125,7 @@ public final class PerceptionBuilder {
                 new int[]{origin.getX(), origin.getY(), origin.getZ()}, s.getHealth(), s.getFoodLevel(), holding, inv,
                 s.describeActivity(), List.copyOf(blocks), List.copyOf(entities),
                 board == null ? List.of() : board.views(selfId, boardNow, item -> feasible(seenBlocks, item),
-                        t -> true)); // notes: consent/provider gating comes with the host phase (review finding 2)
+                        noteVisible == null ? t -> false : noteVisible)); // notes: fail closed without a gate
     }
 
     /** A task's item counts as feasible when a block of it is in sight. */

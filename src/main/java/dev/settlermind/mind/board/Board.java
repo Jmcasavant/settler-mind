@@ -403,6 +403,12 @@ public final class Board {
         return r == null ? null : r.holderName;
     }
 
+    /**
+     * Drops every reservation. For server start: work in progress is not saved, so any reservation in a
+     * loaded save is left over from a session that ended mid-mine and would only block others until it lapsed.
+     */
+    public void clearReservations() { reservations.clear(); }
+
     public void releaseAll(String holderId) {
         if (holderId == null) return;
         reservations.values().removeIf(r -> holderId.equals(r.holderId));

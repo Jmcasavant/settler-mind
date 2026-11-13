@@ -5,6 +5,18 @@ decisions are marked **[approved]**; the rest were made by the agent under the w
 
 ## 2026-11-13
 
+- **Board review phase B (host) and C (eval sim)** done locally after the cloud session's work did not
+  arrive; docs/reviews/2026-11-13-board-review.md "Fix status". Choices made:
+  - Mining credit is capped per item at what the break's own item entities held. *Alternative:* follow
+    each drop entity to its pickup, which is more exact but breaks when drops merge. *Revert:* `MineBlockSkill.cap`.
+  - Reservations are released on Fabric `ENTITY_UNLOAD` and cleared at server start, because work in
+    progress isn't saved. *Revert:* the handler in `MindHost.register` and the line in the `MindHost` constructor.
+  - An owner's cancel of a settler's post needs the settler loaded, because the owner is only known from
+    the entity. It fails closed. *Alternative:* store the owner id on the task (a save-format change).
+  - `boardAnnouncements` keeps the default `all`. Narrowing it to `nearby` changes player experience,
+    so that's the owner's call.
+  - Notes follow the chat consent rule (`MindHost.noteShareable`).
+
 - **Working agreement** [approved]: the agent leads; the owner approves money, merges, the live server,
   product, privacy and big irreversible choices. *Revert:* edit AGENTS.md.
 - **Coordination board v1 = GATHER tasks only** (docs/BOARD.md). *Why:* MINDcraft (arXiv 2504.17950)

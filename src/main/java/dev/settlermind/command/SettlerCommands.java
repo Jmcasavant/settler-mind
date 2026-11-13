@@ -269,7 +269,7 @@ public final class SettlerCommands {
             case Board.TOO_MANY_POSTS -> "You already have " + Board.MAX_ACTIVE_POSTS_PER_POSTER + " open tasks on the board.";
             case Board.RATE_LIMITED -> "You just posted a task; wait a few seconds before posting another.";
             case Board.NOT_FOUND -> "There is no task " + subject + " on the board. See /settler board.";
-            case Board.NOT_ALLOWED -> "Only whoever posted " + subject + " (or an operator) can cancel it.";
+            case Board.NOT_ALLOWED -> "Only whoever posted " + subject + ", the owner of the settler that posted it (while it is loaded), or an operator can cancel it.";
             case Board.ALREADY_CLOSED -> "Task " + subject + " is already done or cancelled.";
             default -> "The board refused that (" + code + ").";
         };

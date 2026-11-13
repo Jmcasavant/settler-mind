@@ -419,6 +419,9 @@ public class SettlerEntity extends PathAwareEntity {
     }
 
     public void setOwner(ServerPlayerEntity owner) { ownerUuid = owner.getUuid(); }
+    /** For tests and tooling that have an owner's id but no online player. */
+    public void setOwnerId(@Nullable UUID owner) { ownerUuid = owner; }
+
     public @Nullable UUID getOwnerUuid() { return ownerUuid; }
 
     public String getSettlerName() { return settlerName; }

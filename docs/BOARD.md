@@ -224,3 +224,20 @@ only); dismissal also cancels the settler's posts; perception shows only other h
 ranks a task as feasible when a block of its item is in sight. Notes are still shown to every settler
 (`noteVisible` = always) until the host phase gates them. The eval simulation seeds a scenario's tasks
 200 ticks apart (the last at tick 0) to respect the rate limit.
+
+## Changes after review (2026-11-13, phase B: Minecraft host)
+
+- **Notes reach a remote model only with consent (finding 2):** a player's note is shown to settlers
+  only if that player opted in with `/settler consent on`, or no route uses a remote provider, or
+  `requireChatConsent` is off (the same rule as chat). Settler posts carry no note. `PerceptionBuilder`
+  hides every note when it isn't given a gate.
+- **Credit only from this break (finding 4):** the mining evidence `+n item` (which the board credits)
+  is capped at what this break's own drops held. Items lying nearby that the settler picks up while
+  collecting stay in its inventory, but they aren't evidence.
+- **Reservations (finding 9):** released when the entity leaves its world for any reason, cleared at
+  server start, and re-asserted every 200 ticks during a slow break. Keys already include the
+  dimension outside the overworld.
+- **Owners can cancel their settlers' posts** (`/settler task cancel`) while the settler is loaded;
+  otherwise it fails closed and the post still expires.
+- **Announcements (finding 5):** `boardAnnouncements` = `all` (default) | `nearby` (players in hearing
+  range of a posting settler, plus its owner) | `off`. Player posts are always confirmed to the poster.

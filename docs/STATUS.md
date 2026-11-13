@@ -6,7 +6,7 @@ Fabric Language Kotlin 1.13.14+kotlin.2.4.20 (runtime for the SDK; chosen becaus
 
 ## Verified
 
-**Unit tests: 63/63 pass**: mind 13, board core 29, board in the mind 13, eval harness 8 (after the board review fixes, phase A: identity by id, OPEN TTL, rate limit, closed-task cap, load repair, namespaced items, note framing; docs/BOARD.md "Changes after review"). Game tests 11/11 pass on the same build (1 run).
+**Unit tests: 73/73 pass**: mind 13, board core 29, board in the mind 13, eval harness 8, simulation fidelity 10 (after the board review fixes, phases A–C; docs/reviews/2026-11-13-board-review.md, every finding ticked). **Game tests 13/13**: 12 consecutive passing runs locally (JDK 21) after phase B. Two runs before those each had 1 failing test while another Gradle build ran on the same machine; the failing test wasn't captured, and it hasn't recurred.
 
 **Mind unit tests (13)** (`./gradlew test`, no Minecraft needed)
 - Relevant memories beat recent trivia; forgetting spares reflections and lessons.
@@ -29,7 +29,7 @@ Fabric Language Kotlin 1.13.14+kotlin.2.4.20 (runtime for the SDK; chosen becaus
   - **mind:** repeat suppression was not time-bounded, so a settler could never say the same thing
     twice, even an hour apart. It now uses a 1-minute window.
 
-**In-world game tests: 11/11 pass, 4 consecutive runs** (the 9 below plus 2 board tests; the 9 had 6 earlier consecutive runs) (`./gradlew runGametest`, headless dedicated server)
+**In-world game tests: 13/13 pass, 12 consecutive local runs** (the 9 below plus 4 board tests) (`./gradlew runGametest`, headless dedicated server)
 - Body: mining with verified pickup, best tool, stone by hand reported as PARTIAL, bedrock refused,
   block changed mid-mine detected, eating and food choice, save/load without duplication, dismissal
   without item loss.
@@ -47,6 +47,11 @@ Fabric Language Kotlin 1.13.14+kotlin.2.4.20 (runtime for the SDK; chosen becaus
     released after the verified mine.
   - The board persists in the world save (`settlermind_minds.dat`, key `Board`): across runs of the
     reused test world, task ids continued (T2, T3, T4…) and leftover tasks were loaded.
+  - Two owners' settlers both named Dot stay apart: one's claim, release, credit, reservation and dismissal
+    never affect the other, and only a settler's own owner can cancel its post.
+  - Logs already lying next to a mined log and picked up while collecting are not credited: the evidence is
+    `+1 minecraft:oak_log` and task progress is 1.
+  - A settler's reservations are released when its entity leaves the world.
 
 **Build:** the mod jar nests 21 SDK runtime libraries. Kotlin comes from Fabric Language Kotlin, not bundled.
 

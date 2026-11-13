@@ -69,13 +69,35 @@ world edits.
 Phase A (board core and mind; see docs/BOARD.md "Changes after review"):
 - [x] 1. Identity: stable id + kind everywhere on the board; names display only.
 - [x] 2. Notes, board side: sanitised, framed as the poster's words, `noteVisible` gate, system prompt rule.
-  Host side (consent/provider gating) still open.
+  Host side done in phase B.
 - [x] 3. Liveness: OPEN TTL (3 days), `cancel_task`, `cancelAllPostedBy` on dismissal, feasibility-ranked views.
-- [ ] 4. Credit only from this break's drops (host).
-- [x] 5. Rate limit per poster, closed-task cap (50), bounded history. Less broadcasting: host, open.
-- [ ] 6. Eval simulation fidelity (sim).
+- [x] 4. Credit only from this break's drops (host, phase B).
+- [x] 5. Rate limit per poster, closed-task cap (50), bounded history. Less broadcasting: phase B made it
+  configurable; the default (`all`) is unchanged pending the owner (it changes player experience).
+- [x] 6. Eval simulation fidelity (sim, phase C).
 - [x] 7. `Board.load` re-validates, repairs or drops, and bounds sizes.
 - [x] 8. No case-insensitive name comparisons for authority (ids compared exactly).
-- [ ] 9. Reservation leaks and lapses (host).
+- [x] 9. Reservation leaks and lapses (host, phase B; the dimension was already in the key).
 - [x] 10. `no_board` ablation hides and doesn't enforce `reservedBy`.
 - [x] 11. Board side: full namespaced item ids, exact normalised credit. (Cancel-after-break credit: unchanged, fails safe.)
+
+Phase B (Minecraft host; see docs/BOARD.md "Changes after review, phase B"):
+- 2 (host): `MindHost.noteShareable` shows a player's note to settlers only if the poster has
+  `/settler consent on`, or no remote provider is configured, or consent isn't required. Notes are hidden
+  when no gate is given (fail closed).
+- 4: `MineBlockSkill` records the item entities its own break spawned and reports (and so credits) each
+  gain capped at what dropped. Items picked up meanwhile are kept but not credited. Game test
+  `creditCountsOnlyWhatThisBreakDropped`.
+- 5 (host): `boardAnnouncements` config, `all` (default, unchanged) / `nearby` / `off`.
+- 9: reservations are released whenever a settler's entity unloads (death, chunk unload, dimension change,
+  dismissal; Fabric `ENTITY_UNLOAD`) and cleared at server start (work in progress isn't saved). A long
+  break re-asserts its reservation every 200 ticks (TTL 1200) and fails `reserved` if it lost it.
+- 1 (host follow-up): an owner can cancel their settler's posts while it's loaded (fails closed otherwise).
+  Game test `sameNamedSettlersOfDifferentOwnersStayApart` covers two owners' settlers both named Dot:
+  claim, release, credit, reservation, owner cancel, and dismissal stay separate.
+
+Phase C (eval simulation; see docs/EVAL.md): multi-step mining with reservations held throughout,
+decision latency with snapshot fencing tokens, `doubleClaims`/`doubleCredits` derived from a recorded
+claim history, and the sim's `post_task` item check. `SimulationFidelityTest` (10 tests).
+
+Every finding is now fixed. Deferred: none. Open owner call: the announcement default (finding 5).

@@ -15,17 +15,25 @@ import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
  * Walk to a block, mine it with the best tool in the inventory, pick up the drops,
  * and succeed only if the inventory actually gained items. Addresses the classic
  * "block broke but nothing was collected" false success.
+ *
+ * <p>The success evidence ("+n item", which the board credits) counts only what this break dropped:
+ * items the settler happened to walk over while collecting are kept but not reported (review finding 4).
  */
 public final class MineBlockSkill implements Skill {
     private static final int COLLECT_TIMEOUT = 20 * 4;
+    /** Re-assert the block reservation this often during a long break, well inside its TTL. */
+    static final int RESERVE_REFRESH_TICKS = 200;
 
     private enum Phase { APPROACH, BREAK, COLLECT }
 
@@ -37,6 +45,9 @@ public final class MineBlockSkill implements Skill {
     private @Nullable BlockState expected;
     private Map<Item, Integer> before = Map.of();
     private int maxDropsSeen;
+    /** Item entities spawned by this break, and their total counts per item (the most we may report). */
+    private List<ItemEntity> ourDrops = List.of();
+    private Map<Item, Integer> dropped = Map.of();
 
     public MineBlockSkill(BlockPos target) {
         this.target = target.toImmutable();
@@ -92,6 +103,11 @@ public final class MineBlockSkill implements Skill {
         }
         s.getLookControl().lookAt(Vec3d.ofCenter(target));
         if (phaseTicks % 5 == 1) s.swingHand(Hand.MAIN_HAND);
+        // A slow break (hard block, bare hands) must not let the reservation lapse under us.
+        if (phaseTicks % RESERVE_REFRESH_TICKS == 0 && !SettlerEntity.events.reserveBlock(s, target)) {
+            world.setBlockBreakingInfo(s.getId(), target, -1);
+            return reserved();
+        }
 
         float delta = BorrowedHands.with(s, fake -> now.calcBlockBreakingDelta(fake, world, target));
         if (delta <= 0) return Outcome.fail("unbreakable", id(now));
@@ -100,18 +116,22 @@ public final class MineBlockSkill implements Skill {
         if (progress < 1.0f) return null;
 
         world.setBlockBreakingInfo(s.getId(), target, -1);
+        Set<UUID> lyingAround = nearbyDrops(world).stream().map(ItemEntity::getUuid).collect(Collectors.toSet());
         boolean broke = BorrowedHands.with(s, (FakePlayer fake) -> fake.interactionManager.tryBreakBlock(target));
         s.addExhaustion(0.005f);
         if (!broke || world.getBlockState(target) == expected) {
             return Outcome.fail("break_denied", "the game or another mod refused the break");
         }
+        ourDrops = nearbyDrops(world).stream().filter(e -> !lyingAround.contains(e.getUuid())).toList();
+        Map<Item, Integer> counts = new HashMap<>();
+        for (ItemEntity e : ourDrops) counts.merge(e.getStack().getItem(), e.getStack().getCount(), Integer::sum);
+        dropped = Map.copyOf(counts);
         enter(Phase.COLLECT);
         return null;
     }
 
     private @Nullable Outcome collect(SettlerEntity s, ServerWorld world) {
-        List<ItemEntity> drops = world.getEntitiesByClass(ItemEntity.class,
-                new Box(target).expand(4.0), e -> e.isAlive() && !e.getStack().isEmpty());
+        List<ItemEntity> drops = ourDrops.stream().filter(e -> e.isAlive() && !e.getStack().isEmpty()).toList();
         maxDropsSeen = Math.max(maxDropsSeen, drops.size());
         if (!drops.isEmpty() && phaseTicks <= COLLECT_TIMEOUT) {
             ItemEntity nearest = drops.stream()
@@ -126,7 +146,7 @@ public final class MineBlockSkill implements Skill {
             }
             return null;
         }
-        Map<Item, Integer> gained = diff(before, s.inventoryCounts());
+        Map<Item, Integer> gained = cap(diff(before, s.inventoryCounts()), dropped);
         if (gained.isEmpty()) {
             String why = maxDropsSeen == 0 ? "nothing dropped"
                     : drops.isEmpty() ? maxDropsSeen + " drop(s) vanished before pickup (taken by something else?)"
@@ -158,6 +178,21 @@ public final class MineBlockSkill implements Skill {
 
     private static String id(BlockState state) {
         return Registries.BLOCK.getId(state.getBlock()).toString();
+    }
+
+    private List<ItemEntity> nearbyDrops(ServerWorld world) {
+        return world.getEntitiesByClass(ItemEntity.class, new Box(target).expand(4.0),
+                e -> e.isAlive() && !e.getStack().isEmpty());
+    }
+
+    /** Each gain limited to what was dropped; items that were not dropped at all are left out. */
+    static <K> Map<K, Integer> cap(Map<K, Integer> gained, Map<K, Integer> dropped) {
+        Map<K, Integer> out = new HashMap<>();
+        gained.forEach((k, n) -> {
+            int c = Math.min(n, dropped.getOrDefault(k, 0));
+            if (c > 0) out.put(k, c);
+        });
+        return out;
     }
 
     static Map<Item, Integer> diff(Map<Item, Integer> before, Map<Item, Integer> after) {

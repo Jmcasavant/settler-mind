@@ -25,6 +25,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -304,6 +305,85 @@ public final class SettlerGameTests implements FabricGameTest {
             expectOutcome(dot, Outcome.Status.SUCCEEDED, "ok");
             if (count(dot, Items.OAK_LOG) != 1 || count(eli, Items.OAK_LOG) != 0) throw new GameTestException("log went to the wrong settler");
             if (board.holderId(key, ctx.getWorld().getTime()) != null) throw new GameTestException("reservation not released after mining");
+        });
+    }
+
+    private static BoardTask posted(Board.Result r) {
+        if (r.task() == null) throw new GameTestException("could not post: " + r.code());
+        return r.task();
+    }
+
+    private static void expectOk(Board.Result r, String what) {
+        if (!r.ok()) throw new GameTestException(what + ": " + r.code());
+    }
+
+    /** Review finding 1 end to end: two owners' settlers share a name but nothing else (identity is the UUID). */
+    @GameTest(templateName = EMPTY_STRUCTURE, batchId = "board-identity")
+    public void sameNamedSettlersOfDifferentOwnersStayApart(TestContext ctx) {
+        floor(ctx);
+        MindHost host = host();
+        Board board = host.board();
+        long now = ctx.getWorld().getTime();
+        UUID aliceId = UUID.randomUUID(), bobId = UUID.randomUUID();
+        SettlerEntity alicesDot = named(ctx, "Dot", START);
+        SettlerEntity bobsDot = named(ctx, "Dot", new BlockPos(6, 1, 1));
+        alicesDot.setOwnerId(aliceId);
+        bobsDot.setOwnerId(bobId);
+        String a = alicesDot.getUuid().toString(), b = bobsDot.getUuid().toString();
+
+        BoardTask task = posted(board.post("gametest-" + UUID.randomUUID(), BoardTask.KIND_PLAYER, "Gia", "oak_log", 3, null, now));
+        expectOk(board.claim(task.id, a, "Dot", task.revision, now), "Alice's Dot claims");
+        if (board.claim(task.id, b, "Dot", task.revision, now).ok()) throw new GameTestException("both Dots hold the claim");
+        if (board.release(task.id, b, now).ok()) throw new GameTestException("Bob's Dot released Alice's Dot's claim");
+        if (!board.credit(b, "minecraft:oak_log", 1, now).isEmpty() || task.progress != 0) {
+            throw new GameTestException("Bob's Dot was credited on Alice's Dot's claim");
+        }
+
+        BlockPos abs = ctx.getAbsolutePos(LOG);
+        String key = PerceptionBuilder.posKey(ctx.getWorld(), abs);
+        if (!SettlerEntity.events.reserveBlock(alicesDot, abs)) throw new GameTestException("Alice's Dot could not reserve");
+        if (SettlerEntity.events.reserveBlock(bobsDot, abs)) throw new GameTestException("Bob's Dot shares Alice's Dot's reservation");
+
+        BoardTask post = posted(board.post(a, BoardTask.KIND_SETTLER, "Dot", "cobblestone", 1, null, now));
+        if (host.cancelTask(post.id, bobId, "Bob", false).ok()) throw new GameTestException("Bob cancelled Alice's settler's post");
+        expectOk(host.cancelTask(post.id, aliceId, "Alice", false), "Alice cancels her settler's post");
+
+        bobsDot.dismiss();
+        if (!a.equals(task.claimantId)) throw new GameTestException("dismissing Bob's Dot released Alice's Dot's claim");
+        if (!a.equals(board.holderId(key, now))) throw new GameTestException("dismissing Bob's Dot released Alice's Dot's reservation");
+
+        alicesDot.discard(); // same path as unloading, dying or changing dimension
+        if (board.holderId(key, now) != null) throw new GameTestException("a reservation outlived its settler");
+        if (!a.equals(task.claimantId)) throw new GameTestException("an unloaded settler's claim should survive (it lapses later)");
+        board.cancel(task.id, null, null, true, now);
+        ctx.complete();
+    }
+
+    /** Review finding 4: logs already lying around and picked up while collecting are not gathering credit. */
+    @GameTest(templateName = EMPTY_STRUCTURE, tickLimit = 400, batchId = "board-credit")
+    public void creditCountsOnlyWhatThisBreakDropped(TestContext ctx) {
+        floor(ctx);
+        Board board = host().board();
+        long now = ctx.getWorld().getTime();
+        ctx.setBlockState(LOG, Blocks.OAK_LOG);
+        BlockPos abs = ctx.getAbsolutePos(LOG);
+        SettlerEntity fay = named(ctx, "Fay", START);
+        String f = fay.getUuid().toString();
+        BoardTask task = posted(board.post("gametest-" + UUID.randomUUID(), BoardTask.KIND_PLAYER, "Gia", "oak_log", 5, null, now));
+        expectOk(board.claim(task.id, f, "Fay", task.revision, now), "Fay claims");
+        // Beside the log on the far side: not merged with the new drop (more than half a block away), in pickup range of it.
+        for (BlockPos rel : List.of(LOG.east(), LOG.south())) {
+            BlockPos p = ctx.getAbsolutePos(rel);
+            ctx.getWorld().spawnEntity(new ItemEntity(ctx.getWorld(), p.getX() + 0.5, p.getY() + 0.1, p.getZ() + 0.5,
+                    new ItemStack(Items.OAK_LOG, 2), 0, 0, 0));
+        }
+        fay.setPlan(List.of(new Decision.Step("mine", null, abs.getX(), abs.getY(), abs.getZ(), null)));
+        until(ctx, 380, () -> {
+            expectOutcome(fay, Outcome.Status.SUCCEEDED, "ok");
+            String detail = fay.getLastOutcome().detail();
+            if (!"+1 minecraft:oak_log".equals(detail)) throw new GameTestException("evidence should be this break's drop only, got " + detail);
+            if (task.progress != 1) throw new GameTestException("credited " + task.progress + " (Fay holds " + count(fay, Items.OAK_LOG) + " logs)");
+            board.cancel(task.id, null, null, true, ctx.getWorld().getTime());
         });
     }
 }
