@@ -44,12 +44,13 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-reports
+          name: test-and-eval-reports
           path: |
             build/reports/tests/
             build/test-results/
             build/junit-gametest.xml
             build/gametest/logs/
+            build/eval/
           if-no-files-found: ignore
 
       - name: Upload mod jar

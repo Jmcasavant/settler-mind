@@ -51,7 +51,7 @@ public final class SettlerMindConfig {
         public double maxEstimatedUsdPerDay = 2.00;
     }
 
-    static SettlerMindConfig defaults() {
+    public static SettlerMindConfig defaults() {
         SettlerMindConfig c = new SettlerMindConfig();
         c.routes.put("decide", new RouteConfig("scripted", "claude-opus-5-5", "low", 1500));
         c.routes.put("reflect", new RouteConfig("scripted", "claude-opus-5-5", "medium", 1500));

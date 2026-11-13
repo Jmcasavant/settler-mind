@@ -139,6 +139,7 @@ class MindTest {
         Decision d = new Decision("", "Hello there.", null, "calm", null, List.of(), List.of(), null);
         assertNotNull(m.acceptSpeech(d, 1));
         assertNull(m.acceptSpeech(d, 2));
+        assertNotNull(m.acceptSpeech(d, 2 + Mind.REPEAT_WINDOW + 1), "fine to say it again later");
     }
 
     @Test

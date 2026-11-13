@@ -48,7 +48,7 @@ CoALA mapping (2309.02427):
 
 **Should:**
 1. **Structured coordination board** (claim/request/done tasks) visible in perception. MINDcraft found natural language is the main coordination bottleneck.
-2. **Evaluation harness** (see below). Needed to choose models and to justify each feature.
+2. ~~Evaluation harness~~ (done: docs/EVAL.md). Next: pairwise TrueSkill comparisons, multi-day drift and cooperation scenarios.
 3. **Near-duplicate memory merge / summarise-and-forget** (Lyfe Agents).
 4. **Preemption:** a danger reflex (flee) that cancels plans without waiting for the model.
 5. **`chat` route** for pure conversation, cheaper than `decide`.
@@ -59,7 +59,9 @@ CoALA mapping (2309.02427):
 8. Saved routines: verified compositions of catalog steps (Voyager-style skill library, but no generated code).
 9. Settlement-level culture: shared norms, roles, elections. Only once individuals are convincing.
 
-## Evaluation (to build)
+## Evaluation
+
+Implemented in the eval harness: see **docs/EVAL.md**. The methods are:
 
 - **Interviews** (Generative Agents style): ask settlers fixed questions about self, memory, plans,
   reactions and reflections. Judge pairwise with a model and by hand, and score with TrueSkill.

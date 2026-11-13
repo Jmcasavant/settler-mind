@@ -44,7 +44,7 @@ from `/settler usage`; replace this paragraph with measured figures.
 
 ## How to decide (and re-decide)
 
-1. Build the believability eval set (docs/MIND.md → Evaluation).
+1. Run the eval harness (docs/EVAL.md) for each candidate: `./gradlew runEval -Peval="--provider claude --model <id> --judge claude"`.
 2. Run each route on 2–3 candidate models with the same seeds, prompts and scenarios.
 3. Compare **cost per good decision**: quality score, validity rate (DecisionParser errors), p50/p95
    latency, and tokens. A cheaper model that produces more invalid plans or flat characters is not cheaper.

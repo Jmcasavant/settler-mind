@@ -35,6 +35,7 @@ public final class Mind {
 
     private final String id;
     private final Persona persona;
+    private final MindFeatures features;
     private @Nullable String ownerName;
     private final Needs needs = new Needs();
     private final MemoryStream memory = new MemoryStream();
@@ -45,7 +46,9 @@ public final class Mind {
     private long planDay = -1;
     private long lastReflectTick;
     private final Deque<String> dialogue = new ArrayDeque<>();
-    private final Deque<String> mySaid = new ArrayDeque<>();
+    /** Recent own lines with the tick they were said, to suppress immediate repeats. */
+    private final Deque<Object[]> mySaid = new ArrayDeque<>();
+    static final long REPEAT_WINDOW = 1200;
 
     // transient
     private final List<MindEvent> pending = new ArrayList<>();
@@ -57,8 +60,13 @@ public final class Mind {
     private String lastMood = "calm";
 
     public Mind(String id, Persona persona, @Nullable String ownerName) {
+        this(id, persona, ownerName, MindFeatures.FULL);
+    }
+
+    public Mind(String id, Persona persona, @Nullable String ownerName, MindFeatures features) {
         this.id = id;
         this.persona = persona;
+        this.features = features;
         this.ownerName = ownerName;
         if (ownerName != null) relationships.seedOwner(ownerName);
     }
@@ -84,7 +92,7 @@ public final class Mind {
             }
         } else if (e instanceof MindEvent.ActionFinished a) {
             memory.add(tick, Memory.Kind.EVENT, a.describe(), a.failed() ? 5 : 3, Set.of(a.kind()), "self", 1.0);
-            if (a.failed()) lessons.record(a.kind(), a.code(), a.detail(), tick);
+            if (a.failed() && features.lessons()) lessons.record(a.kind(), a.code(), a.detail(), tick);
             else needs.satisfyPurpose(0.15);
         } else if (e instanceof MindEvent.Hurt h) {
             memory.add(tick, Memory.Kind.EVENT, h.describe(), 6, Set.of(h.by().toLowerCase()), "self", 1.0);
@@ -112,10 +120,11 @@ public final class Mind {
     public boolean hasPending() { return !pending.isEmpty(); }
 
     /** True at the first chance each new day. */
-    public boolean planDue(long tick) { return tick / 24000 != planDay; }
+    public boolean planDue(long tick) { return features.dailyPlan() && tick / 24000 != planDay; }
 
     /** Two to three times a day, if enough has happened (calibrated per Generative Agents). */
     public boolean reflectionDue(long tick) {
+        if (!features.reflection()) return false;
         long since = tick - lastReflectTick;
         return (memory.reflectionDue() && since >= 6000) || (since >= 12000 && memory.size() >= 10 && memory.reflectionDue());
     }
@@ -220,11 +229,11 @@ public final class Mind {
         lastDecision = d;
         lastMood = d.mood();
         JsonObject o = json(raw);
-        if (o != null && o.has("situation_summary") && o.get("situation_summary").isJsonPrimitive()) {
+        if (features.summary() && o != null && o.has("situation_summary") && o.get("situation_summary").isJsonPrimitive()) {
             String s = DecisionParser.clean(o.get("situation_summary").getAsString(), 600);
             if (s != null && !s.isBlank()) summary = s;
         }
-        for (Decision.Feeling f : d.feelings()) {
+        for (Decision.Feeling f : features.relationships() ? d.feelings() : List.<Decision.Feeling>of()) {
             if (f.who().equalsIgnoreCase(persona.name())) continue;
             relationships.feel(persona, f.who(), f.change(), f.why(), tick);
         }
@@ -243,15 +252,16 @@ public final class Mind {
 
     /**
      * Returns the line to say, or null if it should be suppressed (empty, or a repeat of
-     * something said very recently: loop protection that needs no model call).
+     * something said in the last minute: loop protection that needs no model call).
      */
     public @Nullable String acceptSpeech(Decision d, long tick) {
         String say = d.say();
         if (say == null || say.isBlank()) return null;
         String norm = say.toLowerCase().replaceAll("[^a-z0-9 ]", "").trim();
-        if (mySaid.stream().anyMatch(prev -> prev.equals(norm))) return null;
-        mySaid.addLast(norm);
-        if (mySaid.size() > 5) mySaid.removeFirst();
+        while (!mySaid.isEmpty() && tick - (long) mySaid.peekFirst()[1] > REPEAT_WINDOW) mySaid.removeFirst();
+        if (mySaid.stream().anyMatch(prev -> prev[0].equals(norm))) return null;
+        mySaid.addLast(new Object[]{norm, tick});
+        if (mySaid.size() > 8) mySaid.removeFirst();
         pushDialogue(persona.name() + " (you): " + say);
         if (d.sayTo() != null) needs.satisfySocial(0.05);
         return say;
@@ -285,6 +295,7 @@ public final class Mind {
 
     public String id() { return id; }
     public Persona persona() { return persona; }
+    public MindFeatures features() { return features; }
     public @Nullable String ownerName() { return ownerName; }
     public void setOwnerName(String name) { ownerName = name; relationships.seedOwner(name); }
     public Needs needs() { return needs; }

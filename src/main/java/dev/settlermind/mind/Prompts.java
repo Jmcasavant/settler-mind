@@ -82,7 +82,8 @@ public final class Prompts {
 
     public static String decide(Mind m, Perception seen, List<MindEvent> triggers, long now) {
         StringBuilder sb = new StringBuilder();
-        sb.append("## Your situation so far\n").append(m.summary().isBlank() ? "(just arrived)" : m.summary()).append('\n');
+        MindFeatures f = m.features();
+        if (f.summary()) sb.append("## Your situation so far\n").append(m.summary().isBlank() ? "(just arrived)" : m.summary()).append('\n');
         if (!m.intentions().isEmpty()) sb.append("Today you intend to: ").append(String.join("; ", m.intentions())).append('\n');
         if (m.lastDecision() != null && m.lastDecision().goal() != null) sb.append("Your current goal: ").append(m.lastDecision().goal()).append('\n');
         sb.append("\n## How you feel\n").append(m.needs().describe()).append('\n');
@@ -93,20 +94,22 @@ public final class Prompts {
         triggers.forEach(t -> query.append(t.describe()).append(' '));
         for (MindEvent t : triggers) if (t instanceof MindEvent.Heard h) focus.add(h.speaker().toLowerCase());
 
-        sb.append("\n## People you know who are relevant\n");
         int shown = 0;
-        for (Relationships.Bond b : m.relationships().all().values()) {
+        if (f.relationships()) sb.append("\n## People you know who are relevant\n");
+        for (Relationships.Bond b : f.relationships() ? m.relationships().all().values() : List.<Relationships.Bond>of()) {
             if (shown >= 4 || !focus.contains(b.name.toLowerCase())) continue;
             sb.append("- ").append(b.name).append(": you ").append(b.describe()).append('\n');
             shown++;
         }
-        if (shown == 0) sb.append("(nobody relevant)\n");
+        if (f.relationships() && shown == 0) sb.append("(nobody relevant)\n");
 
-        sb.append("\n## Things you've learned\n").append(m.lessons().render());
-        sb.append("\n## What comes to mind\n");
-        List<Memory> recalled = m.memory().recall(query.toString(), focus, now, 8);
-        if (recalled.isEmpty()) sb.append("(nothing)\n");
-        for (Memory mem : recalled) sb.append("- ").append(mem.render(now)).append('\n');
+        if (f.lessons()) sb.append("\n## Things you've learned\n").append(m.lessons().render());
+        if (f.memoryRecall()) {
+            sb.append("\n## What comes to mind\n");
+            List<Memory> recalled = m.memory().recall(query.toString(), focus, now, 8);
+            if (recalled.isEmpty()) sb.append("(nothing)\n");
+            for (Memory mem : recalled) sb.append("- ").append(mem.render(now)).append('\n');
+        }
 
         sb.append("\n## Recent conversation\n");
         if (m.dialogue().isEmpty()) sb.append("(none)\n");

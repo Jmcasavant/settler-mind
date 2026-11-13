@@ -17,6 +17,16 @@ Fabric Language Kotlin 1.13.14+kotlin.2.4.20 (runtime for the SDK; chosen becaus
 - The system prompt stays byte-identical between calls (cache-friendly).
 - The full mind survives a JSON save/load round trip.
 
+**Evaluation harness: 5/5 harness tests pass, offline baseline runs in CI** (`./gradlew runEval`, docs/EVAL.md)
+- 3 scenarios (requests, diffusion, grounding) × 6 conditions (full plus 5 ablations): 0 parse errors and 0 unfounded claims.
+- Requests: all 8 resolved. The very disagreeable settler helps the owner and refuses the stranger; the others help both.
+- The call budget is a hard stop; paid runs refuse to start without a key.
+- Bugs it found and that were fixed:
+  - the harness script wasn't sorted by time;
+  - request results were keyed per requester, not per request;
+  - **mind:** repeat suppression was not time-bounded, so a settler could never say the same thing
+    twice, even an hour apart. It now uses a 1-minute window.
+
 **In-world game tests: 9/9 pass, 6 consecutive runs** (`./gradlew runGametest`, headless dedicated server)
 - Body: mining with verified pickup, best tool, stone by hand reported as PARTIAL, bedrock refused,
   block changed mid-mine detected, eating and food choice, save/load without duplication, dismissal
@@ -56,6 +66,6 @@ GitHub Actions runs the loader-pin check, unit tests and in-world game tests on 
 
 ## Next (see docs/MIND.md backlog)
 
-1. Live Claude run (needs a key) → fill docs/MODELS.md with measured numbers.
-2. Evaluation harness (interviews, ablations, diffusion, persona fidelity).
+1. Live Claude eval run (needs a key): `./gradlew runEval -Peval="--provider claude --judge claude"` → fill docs/MODELS.md.
+2. More scenarios: multi-day memory drift, settler cooperation, repeated insults.
 3. Coordination board; danger preemption; `chat` route; local-model provider.

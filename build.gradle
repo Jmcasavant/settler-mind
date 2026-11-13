@@ -96,3 +96,13 @@ jar { from("LICENSE") { rename { "${it}_${project.base.archivesName.get()}" } } 
 
 // Run game tests as part of `check`.
 check.dependsOn("runGametest")
+
+// Evaluation harness (docs/EVAL.md). Free by default; pass options with -Peval="...".
+tasks.register('runEval', JavaExec) {
+    group = 'verification'
+    description = 'Run settler-mind evaluations and write build/eval/<run>/report.md'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.settlermind.eval.EvalRunner'
+    args = (project.findProperty('eval') ?: '').toString().split(' ').findAll { it }
+    workingDir = projectDir
+}

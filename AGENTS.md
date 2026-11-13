@@ -31,6 +31,7 @@ renaming would need a migration or settlers would vanish.
 | `src/main/java/dev/settlermind/gametest/` | In-world tests on a headless server. |
 | `docs/MIND.md` | Mind architecture and the research it's based on. Read before changing the mind. |
 | `docs/MODELS.md` | Model and cost strategy. Read before touching providers or routes. |
+| `docs/EVAL.md`, `src/test/java/dev/settlermind/eval/` | Evaluation harness: simulated world, scenarios, ablations, judged interviews, cost. |
 | `docs/STATUS.md` | What is verified and what isn't. Keep it honest and current. |
 
 ## Model choice: open, measured, never hard-coded
@@ -44,6 +45,12 @@ renaming would need a migration or settlers would vanish.
 - The default config is free and offline (`scripted`). Paid inference is opt-in, budget-capped
   (per settler, per server, per day), and falls back to the scripted mind when a budget or provider runs out.
 - Keep the system prompt stable per settler (prompt caching); put changing state in the user message.
+
+## Evidence before opinions
+
+Use the eval harness (`./gradlew runEval`, docs/EVAL.md) to justify mind changes and model choices.
+When you change the mind, run the relevant scenarios before and after, and record what changed.
+If a behaviour matters and no scenario covers it, add one.
 
 ## Research basis (keep it current)
 
@@ -72,6 +79,7 @@ evaluation evidence over intuition, and record the source in docs/MIND.md.
 ./gradlew test           # mind unit tests (fast)
 ./gradlew runGametest    # in-world tests, headless server
 ./gradlew build          # everything + jar in build/libs
+./gradlew runEval        # evaluation report in build/eval/ (free by default; see docs/EVAL.md)
 ```
 
 CI (`.github/workflows/ci.yml`) runs the Fabric Loader pin check and `./gradlew build` (unit + in-world
