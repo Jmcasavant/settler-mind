@@ -18,7 +18,7 @@ class MindTest {
 
     static Perception seeing(Perception.SeenBlock... blocks) {
         return new Perception(100, "morning", "clear", new int[]{0, 64, 0}, 20, 20, "nothing", Map.of(),
-                "standing around", List.of(blocks), List.of(new Perception.SeenEntity("player", "Alex", 3, true)));
+                "standing around", List.of(blocks), List.of(new Perception.SeenEntity("player", "Alex", 3, true)), List.of());
     }
 
     static Persona persona(double agreeableness) {

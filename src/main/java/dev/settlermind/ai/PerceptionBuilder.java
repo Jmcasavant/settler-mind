@@ -99,7 +99,7 @@ public final class PerceptionBuilder {
 
         return new Perception(world.getTime(), timeOfDay, weather,
                 new int[]{origin.getX(), origin.getY(), origin.getZ()}, s.getHealth(), s.getFoodLevel(), holding, inv,
-                s.describeActivity(), List.copyOf(blocks), List.copyOf(entities));
+                s.describeActivity(), List.copyOf(blocks), List.copyOf(entities), List.of());
     }
 
     /** Blocks worth mentioning: resources, crops, workstations, storage, beds. */

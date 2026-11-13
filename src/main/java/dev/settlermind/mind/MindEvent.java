@@ -45,4 +45,9 @@ public sealed interface MindEvent {
         public String describe() { return "You notice " + kind + " " + name + " nearby."; }
         public boolean wakes() { return false; }
     }
+
+    /** Something happened on the settlement task board that concerns this settler (done, lapsed, cancelled...). */
+    record Board(String text, boolean wakes) implements MindEvent {
+        public String describe() { return text; }
+    }
 }

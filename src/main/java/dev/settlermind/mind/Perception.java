@@ -1,5 +1,8 @@
 package dev.settlermind.mind;
 
+import dev.settlermind.mind.board.TaskView;
+import org.jetbrains.annotations.Nullable;
+
 import java.util.List;
 import java.util.Map;
 
@@ -7,6 +10,7 @@ import java.util.Map;
  * What a settler can perceive right now: a bounded, engine-agnostic snapshot built on
  * the server thread. It deliberately contains only what the settler could plausibly
  * see or know: no hidden players, no unloaded areas, no other settlers' minds.
+ * {@code board} is the settlement task board as this settler sees it (empty when there is none).
  */
 public record Perception(
         long tick,
@@ -19,16 +23,46 @@ public record Perception(
         Map<String, Integer> inventory,
         String activity,
         List<SeenBlock> blocks,
-        List<SeenEntity> entities) {
+        List<SeenEntity> entities,
+        List<TaskView> board) {
 
-    /** A notable block the settler can see, e.g. a log, ore, crop, chest or bed. */
-    public record SeenBlock(String id, int x, int y, int z, double distance) {}
+    /**
+     * A notable block the settler can see, e.g. a log, ore, crop, chest or bed. {@code reservedBy} names the
+     * settler currently working on it, or is null when nobody is.
+     */
+    public record SeenBlock(String id, int x, int y, int z, double distance, @Nullable String reservedBy) {
+        public SeenBlock(String id, int x, int y, int z, double distance) {
+            this(id, x, y, z, distance, null);
+        }
+    }
 
     /** A creature nearby. {@code kind} is "player", "settler", "hostile", "animal" or "item". */
     public record SeenEntity(String kind, String name, double distance, boolean isOwner) {}
 
+    public Perception {
+        board = board == null ? List.of() : board;
+    }
+
     public boolean canSeeBlock(int x, int y, int z) {
-        return blocks.stream().anyMatch(b -> b.x() == x && b.y() == y && b.z() == z);
+        return blockAt(x, y, z) != null;
+    }
+
+    public @Nullable SeenBlock blockAt(int x, int y, int z) {
+        for (SeenBlock b : blocks) if (b.x() == x && b.y() == y && b.z() == z) return b;
+        return null;
+    }
+
+    /** The visible board task with this id (case-insensitive), or null. */
+    public @Nullable TaskView task(String id) {
+        if (id == null) return null;
+        for (TaskView t : board) if (t.id().equalsIgnoreCase(id.trim())) return t;
+        return null;
+    }
+
+    /** The same perception with a different board (e.g. empty, when the board feature is off). */
+    public Perception withBoard(List<TaskView> newBoard) {
+        return new Perception(tick, timeOfDay, weather, position, health, food, holding, inventory, activity,
+                blocks, entities, newBoard);
     }
 
     public boolean canSee(String kind, String name) {
@@ -54,7 +88,8 @@ public record Perception(
         }
         for (SeenBlock b : blocks) {
             sb.append("- ").append(b.id()).append(" at ").append(b.x()).append(' ').append(b.y()).append(' ').append(b.z())
-                    .append(" (").append(Math.round(b.distance())).append(" blocks)\n");
+                    .append(" (").append(Math.round(b.distance())).append(" blocks")
+                    .append(b.reservedBy() == null ? "" : ", " + b.reservedBy() + " is working on it").append(")\n");
         }
         return sb.toString();
     }

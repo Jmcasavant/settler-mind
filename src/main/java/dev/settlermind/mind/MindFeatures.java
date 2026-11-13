@@ -10,18 +10,20 @@ public record MindFeatures(
         boolean summary,
         boolean relationships,
         boolean lessons,
-        boolean memoryRecall) {
+        boolean memoryRecall,
+        boolean board) {
 
-    public static final MindFeatures FULL = new MindFeatures(true, true, true, true, true, true);
+    public static final MindFeatures FULL = new MindFeatures(true, true, true, true, true, true, true);
 
     public MindFeatures without(String feature) {
         return switch (feature) {
-            case "reflection" -> new MindFeatures(false, dailyPlan, summary, relationships, lessons, memoryRecall);
-            case "plan" -> new MindFeatures(reflection, false, summary, relationships, lessons, memoryRecall);
-            case "summary" -> new MindFeatures(reflection, dailyPlan, false, relationships, lessons, memoryRecall);
-            case "relationships" -> new MindFeatures(reflection, dailyPlan, summary, false, lessons, memoryRecall);
-            case "lessons" -> new MindFeatures(reflection, dailyPlan, summary, relationships, false, memoryRecall);
-            case "memory" -> new MindFeatures(reflection, dailyPlan, summary, relationships, lessons, false);
+            case "reflection" -> new MindFeatures(false, dailyPlan, summary, relationships, lessons, memoryRecall, board);
+            case "plan" -> new MindFeatures(reflection, false, summary, relationships, lessons, memoryRecall, board);
+            case "summary" -> new MindFeatures(reflection, dailyPlan, false, relationships, lessons, memoryRecall, board);
+            case "relationships" -> new MindFeatures(reflection, dailyPlan, summary, false, lessons, memoryRecall, board);
+            case "lessons" -> new MindFeatures(reflection, dailyPlan, summary, relationships, false, memoryRecall, board);
+            case "memory" -> new MindFeatures(reflection, dailyPlan, summary, relationships, lessons, false, board);
+            case "board" -> new MindFeatures(reflection, dailyPlan, summary, relationships, lessons, memoryRecall, false);
             default -> throw new IllegalArgumentException("unknown feature: " + feature);
         };
     }

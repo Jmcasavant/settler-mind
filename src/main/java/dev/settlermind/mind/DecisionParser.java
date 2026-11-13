@@ -5,7 +5,13 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
+import dev.settlermind.mind.board.Board;
+import dev.settlermind.mind.board.BoardTask;
+import dev.settlermind.mind.board.TaskView;
+import org.jetbrains.annotations.Nullable;
+
 import java.util.ArrayList;
+import java.util.Locale;
 import java.util.List;
 import java.util.regex.Pattern;
 
@@ -26,7 +32,16 @@ public final class DecisionParser {
 
     private DecisionParser() {}
 
+    /** Parse with every feature on and no known self (any block reservation counts as someone else's). */
     public static Result parse(String raw, Perception seen) {
+        return parse(raw, seen, MindFeatures.FULL, null);
+    }
+
+    /**
+     * @param features which parts of the mind are on; board steps are rejected when the board is off
+     * @param self     the deciding settler's name, so its own block reservations are not held against it
+     */
+    public static Result parse(String raw, Perception seen, MindFeatures features, @Nullable String self) {
         List<String> errors = new ArrayList<>();
         JsonObject o;
         try {
@@ -52,13 +67,18 @@ public final class DecisionParser {
             if (!rawSteps.get(i).isJsonObject()) { errors.add("step " + i + " is not an object"); continue; }
             JsonObject s = rawSteps.get(i).getAsJsonObject();
             String kind = str(s, "kind");
-            String err = validateStep(kind, s, seen);
+            String err = validateStep(kind, s, seen, features, self);
             if (err != null) {
                 errors.add("step " + i + " (" + kind + "): " + err);
                 break; // later steps likely depend on this one
             }
+            boolean board = ActionCatalog.isBoard(kind);
+            TaskView task = board ? seen.task(str(s, "task")) : null;
             steps.add(new Decision.Step(kind, clean(str(s, "target"), 32), intOrNull(s, "x"), intOrNull(s, "y"),
-                    intOrNull(s, "z"), intOrNull(s, "seconds")));
+                    intOrNull(s, "z"), intOrNull(s, "seconds"),
+                    kind.equals("post_task") ? itemId(str(s, "item")) : null,
+                    kind.equals("post_task") ? intOrNull(s, "count") : null,
+                    task == null ? null : task.id()));
         }
 
         List<Decision.Feeling> feelings = new ArrayList<>();
@@ -85,13 +105,36 @@ public final class DecisionParser {
     }
 
     /** @return null if valid, otherwise why not. */
-    static String validateStep(String kind, JsonObject s, Perception seen) {
+    static String validateStep(String kind, JsonObject s, Perception seen, MindFeatures features, @Nullable String self) {
         if (kind == null || !ActionCatalog.known(kind)) return "unknown action; choose from the list";
+        if (ActionCatalog.isBoard(kind) && !features.board()) return "there is no task board; choose from the list";
         switch (kind) {
             case "mine" -> {
                 Integer x = intOrNull(s, "x"), y = intOrNull(s, "y"), z = intOrNull(s, "z");
                 if (x == null || y == null || z == null) return "needs x, y, z";
-                if (!seen.canSeeBlock(x, y, z)) return "you can't see a block there; use coordinates from what you see";
+                Perception.SeenBlock b = seen.blockAt(x, y, z);
+                if (b == null) return "you can't see a block there; use coordinates from what you see";
+                if (b.reservedBy() != null && (self == null || !b.reservedBy().equalsIgnoreCase(self))) {
+                    return "someone else (" + b.reservedBy() + ") is working on that block";
+                }
+            }
+            case "post_task" -> {
+                String item = itemId(str(s, "item"));
+                if (item == null) return "item must be an item id like oak_log";
+                Integer count = intOrNull(s, "count");
+                if (count == null || count < Board.MIN_COUNT || count > Board.MAX_COUNT) {
+                    return "count must be " + Board.MIN_COUNT + "-" + Board.MAX_COUNT;
+                }
+            }
+            case "claim_task" -> {
+                TaskView t = seen.task(str(s, "task"));
+                if (t == null) return "no task " + str(s, "task") + " on the board you can see";
+                if (t.status() != BoardTask.Status.OPEN) return "task " + t.id() + " is not open";
+            }
+            case "release_task" -> {
+                TaskView t = seen.task(str(s, "task"));
+                if (t == null) return "no task " + str(s, "task") + " on the board you can see";
+                if (!t.mine()) return "task " + t.id() + " is not yours";
             }
             case "go_to" -> {
                 Integer x = intOrNull(s, "x"), y = intOrNull(s, "y"), z = intOrNull(s, "z");
@@ -111,6 +154,18 @@ public final class DecisionParser {
             default -> { }
         }
         return null;
+    }
+
+    /**
+     * A board item id: lowercase {@code [a-z0-9_]}, 1-64 chars; a leading {@code minecraft:} is tolerated.
+     * @return the normalised id, or null if invalid
+     */
+    static @Nullable String itemId(@Nullable String raw) {
+        if (raw == null) return null;
+        String id = raw.trim().toLowerCase(Locale.ROOT);
+        if (id.startsWith("minecraft:")) id = id.substring("minecraft:".length());
+        if (id.isEmpty() || id.length() > Board.MAX_ITEM_LENGTH || !Board.ITEM.matcher(id).matches()) return null;
+        return id;
     }
 
     /** Remove formatting codes, control characters and links; trim to length. */

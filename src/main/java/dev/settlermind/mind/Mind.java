@@ -96,6 +96,9 @@ public final class Mind {
             else needs.satisfyPurpose(0.15);
         } else if (e instanceof MindEvent.Hurt h) {
             memory.add(tick, Memory.Kind.EVENT, h.describe(), 6, Set.of(h.by().toLowerCase()), "self", 1.0);
+        } else if (e instanceof MindEvent.Board b) {
+            // Board news about this settler's own tasks: a lapsed claim matters more than routine progress.
+            memory.add(tick, Memory.Kind.EVENT, b.describe(), b.wakes() ? 5 : 4, Set.of("board"), "self", 1.0);
         } else if (e instanceof MindEvent.Noticed n) {
             if (!relationships.knows(n.name())) {
                 memory.add(tick, Memory.Kind.EVENT, "First met " + n.kind() + " " + n.name(), 4,
@@ -149,6 +152,8 @@ public final class Mind {
             return null;
         }
         Perception seen = perceive.get();
+        // Ablation: with the board off the mind never sees it (prompts, scripted mind and validation alike).
+        if (!features.board() && !seen.board().isEmpty()) seen = seen.withBoard(List.of());
         String user = switch (route) {
             case "plan" -> Prompts.plan(this, seen, tick);
             case "reflect" -> Prompts.reflect(this, tick);
@@ -162,7 +167,7 @@ public final class Mind {
         List<String> recent = memory.recent(10).stream().map(Memory::text).toList();
         thinking = true;
         lastThinkTick = tick;
-        return new CognitionRequest(route, persona.name(), Prompts.system(persona, ownerName), user, schema,
+        return new CognitionRequest(route, persona.name(), Prompts.system(persona, ownerName, features), user, schema,
                 persona, seen, triggers, relationships, recent);
     }
 
@@ -216,7 +221,7 @@ public final class Mind {
                 return null;
             }
             default -> {
-                DecisionParser.Result parsed = DecisionParser.parse(res.text(), req.perception());
+                DecisionParser.Result parsed = DecisionParser.parse(res.text(), req.perception(), features, persona.name());
                 if (!parsed.clean()) lastError = String.join("; ", parsed.errors());
                 Decision d = parsed.decision();
                 apply(d, res.text(), tick);

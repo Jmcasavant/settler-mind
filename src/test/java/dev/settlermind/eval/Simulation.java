@@ -163,7 +163,7 @@ public final class Simulation {
         ledger.record(req.route(), res);
         metrics.call(req.route(), res);
         if (res.ok() && req.route().equals("decide")) {
-            DecisionParser.Result parsed = DecisionParser.parse(res.text(), req.perception());
+            DecisionParser.Result parsed = DecisionParser.parse(res.text(), req.perception(), a.mind.features(), a.name);
             metrics.parsed(parsed);
         }
         Decision d = a.mind.onResult(req, res, tick);
@@ -233,7 +233,7 @@ public final class Simulation {
         long t = tick % 24000;
         String time = t < 6000 ? "morning" : t < 12000 ? "afternoon" : t < 18000 ? "night" : "late night";
         return new Perception(tick, time, "clear", a.pos.clone(), 20, 20, "nothing", Map.copyOf(a.inventory),
-                a.plan.isEmpty() ? "standing around" : "busy", seen, ents);
+                a.plan.isEmpty() ? "standing around" : "busy", seen, ents, List.of());
     }
 
     private String ownerOf(Agent a) {

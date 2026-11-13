@@ -18,9 +18,19 @@ public record Decision(
         List<Feeling> feelings,
         @Nullable Remember remember) {
 
-    /** A concrete step for the body. Unused fields are null. */
+    /**
+     * A concrete step. Unused fields are null. Body steps (mine, go_to, ...) are carried out by the body;
+     * board steps (post_task, claim_task, release_task) are instant social/mental acts the host applies.
+     */
     public record Step(String kind, @Nullable String target, @Nullable Integer x, @Nullable Integer y,
-                       @Nullable Integer z, @Nullable Integer seconds) {
+                       @Nullable Integer z, @Nullable Integer seconds, @Nullable String item,
+                       @Nullable Integer count, @Nullable String task) {
+        /** A body step with no board fields. */
+        public Step(String kind, @Nullable String target, @Nullable Integer x, @Nullable Integer y,
+                    @Nullable Integer z, @Nullable Integer seconds) {
+            this(kind, target, x, y, z, seconds, null, null, null);
+        }
+
         public String describe() {
             return switch (kind) {
                 case "mine" -> "mine the block at " + x + " " + y + " " + z;
@@ -28,6 +38,9 @@ public record Decision(
                 case "follow" -> "follow " + target;
                 case "stay" -> "stay put";
                 case "wait" -> "wait " + seconds + "s";
+                case "post_task" -> "post a task on the board: gather " + count + " " + item;
+                case "claim_task" -> "claim task " + task + " on the board";
+                case "release_task" -> "release task " + task + " on the board";
                 default -> kind;
             };
         }

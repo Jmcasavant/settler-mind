@@ -5,6 +5,8 @@ import com.google.gson.JsonObject;
 import dev.settlermind.mind.MindEvent;
 import dev.settlermind.mind.Perception;
 import dev.settlermind.mind.Persona;
+import dev.settlermind.mind.board.BoardTask;
+import dev.settlermind.mind.board.TaskView;
 
 import java.util.Comparator;
 import java.util.List;
@@ -76,6 +78,8 @@ public final class ScriptedCognition implements Cognition {
             d.addProperty("say", "Ow! Careful!");
             d.addProperty("mood", "scared");
             feel(d, hurt.by(), -1, "hurt me");
+        } else if (keepWorking(req, d)) {
+            // Holding a board claim whose item is in sight: carry on with it.
         } else if (trigger instanceof MindEvent.Idle idle) {
             spendFreeTime(req, idle, p, d);
         }
@@ -99,10 +103,25 @@ public final class ScriptedCognition implements Cognition {
         if (containsAny(text, "thank", "please", "good job", "well done")) {
             feel(d, who, 1, "was kind to me");
         }
+        String boardText = text.replace("good job", "").replace("nice job", "").replace("great job", "");
+        if (!p.board().isEmpty() && containsAny(boardText, "board", "task", "job")) {
+            if (willing < 0.15) {
+                d.addProperty("say", "Not today.");
+                d.addProperty("thought", "I don't feel like taking on work for " + who + ".");
+            } else if (keepWorking(req, d)) {
+                d.addProperty("say", "I'm already on one of those.");
+            } else {
+                TaskView taken = takeTask(req, d);
+                d.addProperty("say", taken == null ? "Nothing on the board I can do from here."
+                        : "I'll take " + taken.id() + ", the " + taken.item().replace('_', ' ') + ".");
+            }
+            return;
+        }
         if (containsAny(text, "wood", "log", "chop", "tree", "mine", "dig")) {
             boolean wantsWood = containsAny(text, "wood", "log", "chop", "tree");
             Optional<Perception.SeenBlock> target = p.blocks().stream()
                     .filter(b -> !wantsWood || b.id().contains("log"))
+                    .filter(b -> free(req, b))
                     .min(Comparator.comparingDouble(Perception.SeenBlock::distance));
             if (target.isEmpty()) {
                 d.addProperty("say", "I don't see any" + (wantsWood ? " wood" : "thing to dig") + " around here.");
@@ -147,7 +166,11 @@ public final class ScriptedCognition implements Cognition {
 
     private static void spendFreeTime(CognitionRequest req, MindEvent.Idle idle, Perception p, JsonObject d) {
         if (idle.pressingNeed().equals("purpose") && req.persona().trait(Persona.CONSCIENTIOUSNESS) >= 0.4) {
-            p.blocks().stream().filter(b -> b.id().contains("log"))
+            if (takeTask(req, d) != null) {
+                d.addProperty("thought", "Someone needs a hand; I can do that.");
+                return;
+            }
+            p.blocks().stream().filter(b -> b.id().contains("log") && free(req, b))
                     .min(Comparator.comparingDouble(Perception.SeenBlock::distance))
                     .ifPresent(b -> {
                         d.add("steps", steps(mine(b)));
@@ -162,6 +185,51 @@ public final class ScriptedCognition implements Cognition {
                         d.addProperty("say_to", e.name());
                     });
         }
+    }
+
+    // ------------------------------------------------------------ board
+
+    /** If holding a claim whose item is in sight, plan to mine one more of it. */
+    private static boolean keepWorking(CognitionRequest req, JsonObject d) {
+        for (TaskView t : req.perception().board()) {
+            if (!t.mine()) continue;
+            Optional<Perception.SeenBlock> b = freeBlockOf(req, t.item());
+            if (b.isEmpty()) continue;
+            d.add("steps", steps(mine(b.get())));
+            d.addProperty("goal", "work on " + t.id() + ": gather " + t.count() + " " + t.item());
+            d.addProperty("mood", "busy");
+            return true;
+        }
+        return false;
+    }
+
+    /** Claim the oldest open task whose item is in sight, and mine one free block of it. */
+    private static TaskView takeTask(CognitionRequest req, JsonObject d) {
+        for (TaskView t : req.perception().board()) { // views list open tasks oldest first
+            if (t.status() != BoardTask.Status.OPEN) continue;
+            Optional<Perception.SeenBlock> b = freeBlockOf(req, t.item());
+            if (b.isEmpty()) continue;
+            JsonObject claim = new JsonObject();
+            claim.addProperty("kind", "claim_task");
+            claim.addProperty("task", t.id());
+            d.add("steps", steps(claim, mine(b.get())));
+            d.addProperty("goal", "work on " + t.id() + ": gather " + t.count() + " " + t.item());
+            d.addProperty("mood", "busy");
+            return t;
+        }
+        return null;
+    }
+
+    /** Nearest visible block of this item that nobody else is working on. */
+    private static Optional<Perception.SeenBlock> freeBlockOf(CognitionRequest req, String item) {
+        return req.perception().blocks().stream()
+                .filter(b -> b.id().equals(item) && free(req, b))
+                .min(Comparator.comparingDouble(Perception.SeenBlock::distance));
+    }
+
+    /** Nobody else is working on this block. */
+    private static boolean free(CognitionRequest req, Perception.SeenBlock b) {
+        return b.reservedBy() == null || b.reservedBy().equalsIgnoreCase(req.settlerName());
     }
 
     private static JsonObject base(String mood) {
