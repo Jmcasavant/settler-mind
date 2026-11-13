@@ -12,6 +12,37 @@ gossip, reflect and learn from failure. Minecraft (Fabric 1.20.1) is the first h
 act with. Do not keep polishing bot primitives at the expense of the mind. Before adding a skill, ask:
 "What does this let a settler *decide, express or learn* that it couldn't before?" If nothing, don't.
 
+## Working agreement: who decides what
+
+The agent leads day-to-day. The owner reviews and approves where it matters. Everything stays in
+sight and revertible.
+
+**The agent decides and proceeds** (recording it in `docs/DECISIONS.md` when it's a real choice):
+- Implementation that follows an agreed design doc (BOARD.md, MIND.md backlog, EVAL.md), plus tests,
+  docs, refactors and bug fixes.
+- Research-backed mind changes, provided an eval scenario or test shows the effect, or the source is cited.
+- Opening and updating **draft** PRs, CI fixes, and dependency patch updates that keep the loader pin.
+- Free, offline evaluation runs.
+
+**Ask the owner first:**
+- **Spending money:** any paid model or API run (state the call cap and estimated cost), and any new
+  paid service.
+- **Merging to `main`**, marking a PR ready for review, releases and tags.
+- **Anything touching the live Homestead server**, its saves or its modpack (never without explicit approval).
+- **Product calls:** the public name, the mod id (see Naming), game-design direction, changes to what
+  settlers may do in the world (new action kinds), and defaults that change player experience.
+- **Privacy, security or safety changes:** consent, what data leaves the server, the trust boundary, permissions.
+- **Big or hard-to-undo choices:** new heavy dependencies, licensing, architecture shifts, deleting
+  data or history, renames of saved ids.
+
+**Keep it reviewable and revertible:**
+- Work on a branch with small, focused commits and a draft PR. Never rewrite pushed history on shared branches.
+- Put risky behaviour behind config, feature switches (`MindFeatures`) or routes, so it can be turned off without a revert.
+- For each consequential decision, add a dated entry to `docs/DECISIONS.md`: what, why (evidence or
+  source), alternatives, and how to revert.
+- When asking for approval, give a short recommendation, the cost or risk, and what happens if the
+  answer is no. Batch questions rather than interrupting.
+
 ## Naming
 
 "Settler Mind" / `settler-mind` is a **codename**; the public name is undecided. Changing display text
@@ -33,6 +64,7 @@ renaming would need a migration or settlers would vanish.
 | `docs/MODELS.md` | Model and cost strategy. Read before touching providers or routes. |
 | `docs/EVAL.md`, `src/test/java/dev/settlermind/eval/` | Evaluation harness: simulated world, scenarios, ablations, judged interviews, cost. |
 | `docs/STATUS.md` | What is verified and what isn't. Keep it honest and current. |
+| `docs/DECISIONS.md` | Dated decision log: what, why, alternatives, how to revert. |
 
 ## Model choice: open, measured, never hard-coded
 

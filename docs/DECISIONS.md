@@ -1,0 +1,31 @@
+# Decision log
+
+Newest first. Each entry: what, why (evidence/source), alternatives, how to revert. Owner-approved
+decisions are marked **[approved]**; the rest were made by the agent under the working agreement in AGENTS.md.
+
+## 2026-11-13
+
+- **Working agreement** [approved]: the agent leads; the owner approves money, merges, the live server,
+  product, privacy and big irreversible choices. *Revert:* edit AGENTS.md.
+- **Coordination board v1 = GATHER tasks only** (docs/BOARD.md). *Why:* MINDcraft (arXiv 2504.17950)
+  found natural language is the main collaboration bottleneck, and gathering is the only outcome the
+  body can verify today. *Alternatives:* free-form tasks (unverifiable), chat-only coordination (the
+  baseline it's measured against). *Revert:* `MindFeatures.board` off; the board steps are in their own catalog entries.
+- **API key via env var or a git-ignored `.env`**, same convention as minecraft-civ-lab; a real API key
+  rather than the subscription CLI login (terms and cost-tracking caveats). *Revert:* remove the `.env`
+  loader block in build.gradle.
+- **Eval harness in test sources, simulated text world.** *Why:* fast, free, repeatable; the same Mind code
+  runs as in game. Paid runs are capped by `--max-calls`. *Alternative:* in-game evals (slow, flaky). *Revert:* delete `src/test/.../eval`.
+- **Repeat suppression is time-bounded (1 min)**, found by the eval harness: settlers could never
+  repeat a line. *Revert:* `Mind.REPEAT_WINDOW`.
+- **Fabric Language Kotlin pinned to 1.13.14** so Fabric Loader stays 0.16.14; 1.14.x raised it to
+  0.19.5 and made startup flaky. *Revert:* `flk_version` in gradle.properties.
+- **Codename `settler-mind`, mod id `settlermind`** [approved]. The public name is undecided.
+- **Model choice is open, per route, and measured** [approved]: no model id in game logic; defaults are
+  offline. See docs/MODELS.md.
+- **The mind is engine-agnostic; the LLM sets goals and talks while deterministic skills act**, with a
+  closed action catalog and validated decisions. *Why:* Generative Agents, Voyager, Odyssey, MINDcraft,
+  and the second-opinion review. See docs/MIND.md.
+- **Body = custom entity plus a transient FakePlayer**, not a puppet real player. *Why:* the
+  second-opinion review (puppet players touch every player-only hook across ~314 mods); PlayerEngine
+  uses the same pattern. See docs/DESIGN.md.
