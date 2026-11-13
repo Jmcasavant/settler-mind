@@ -7,6 +7,10 @@ import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.exceptions.SimpleCommandExceptionType;
 import dev.hearthkin.Hearthkin;
+import dev.hearthkin.ai.MindHost;
+import dev.hearthkin.mind.Memory;
+import dev.hearthkin.mind.Mind;
+import dev.hearthkin.mind.Relationships;
 import dev.hearthkin.entity.SettlerEntity;
 import dev.hearthkin.protection.ProtectionGuard;
 import dev.hearthkin.skill.MineBlockSkill;
@@ -59,6 +63,13 @@ public final class HearthkinCommands {
                     return 1;
                 }))));
 
+        root.then(named("mind", (c, s) -> mind(c.getSource(), s)));
+        root.then(literal("usage").requires(src -> src.hasPermissionLevel(2)).executes(HearthkinCommands::usage));
+        root.then(literal("consent")
+                .then(literal("on").executes(c -> consent(c, true)))
+                .then(literal("off").executes(c -> consent(c, false)))
+                .executes(c -> consent(c, null)));
+
         d.register(root);
     }
 
@@ -91,7 +102,8 @@ public final class HearthkinCommands {
         settler.setOwner(player);
         settler.setSettlerName(name);
         world.spawnEntity(settler);
-        c.getSource().sendFeedback(() -> Text.literal(name + " has arrived. Sneak + right-click to see their inventory; right-click with an item to give it."), false);
+        c.getSource().sendFeedback(() -> Text.literal(name + " has arrived. Talk to them in chat using their name. "
+                + "/hk mind " + name + " shows what they think and remember. Sneak + right-click: inventory."), false);
         String claim = ProtectionGuard.unsupportedClaimMod();
         if (claim != null) {
             c.getSource().sendFeedback(() -> Text.literal("Note: claims mod '" + claim + "' detected and not yet supported, so " + name + " will refuse to change blocks."), false);
@@ -121,6 +133,51 @@ public final class HearthkinCommands {
                 + "\n hand: " + (hand.isEmpty() ? "empty" : Registries.ITEM.getId(hand.getItem()).getPath())
                 + " | carrying: " + (inv.length() == 0 ? "nothing" : inv.substring(0, inv.length() - 2));
         src.sendFeedback(() -> Text.literal(text), false);
+    }
+
+    private static void mind(ServerCommandSource src, SettlerEntity s) {
+        MindHost host = MindHost.get();
+        if (host == null) return;
+        Mind m = host.mindFor(s);
+        long now = s.getWorld().getTime();
+        StringBuilder sb = new StringBuilder();
+        sb.append("== ").append(m.persona().name()).append(" ==\n").append(m.persona().describe()).append('\n');
+        sb.append("Mood: ").append(m.mood()).append(" | Needs: ").append(m.needs().describe()).append('\n');
+        sb.append("Summary: ").append(m.summary().isBlank() ? "-" : m.summary()).append('\n');
+        if (!m.intentions().isEmpty()) sb.append("Today: ").append(String.join("; ", m.intentions())).append('\n');
+        if (m.lastDecision() != null && !m.lastDecision().thought().isBlank()) sb.append("Last thought: ").append(m.lastDecision().thought()).append('\n');
+        for (Relationships.Bond b : m.relationships().all().values()) sb.append("- ").append(b.name).append(": ").append(b.describe()).append('\n');
+        sb.append("Lessons:\n").append(m.lessons().render());
+        sb.append("Memories (").append(m.memory().size()).append(", latest 5):\n");
+        for (Memory mem : m.memory().recent(5)) sb.append("- ").append(mem.render(now)).append('\n');
+        if (m.lastError() != null) sb.append("Last problem: ").append(m.lastError());
+        String text = sb.toString();
+        src.sendFeedback(() -> Text.literal(text), false);
+    }
+
+    private static int usage(CommandContext<ServerCommandSource> c) {
+        MindHost host = MindHost.get();
+        if (host == null) return 0;
+        StringBuilder sb = new StringBuilder("AI usage since server start (estimates):\n");
+        host.ledger().snapshot().forEach((k, v) -> sb.append(k).append(": ").append(v.summary()).append('\n'));
+        sb.append(String.format(java.util.Locale.ROOT, "Total ~$%.4f", host.ledger().totalUsd()));
+        String text = sb.toString();
+        c.getSource().sendFeedback(() -> Text.literal(text), false);
+        return 1;
+    }
+
+    private static int consent(CommandContext<ServerCommandSource> c, Boolean on) throws CommandSyntaxException {
+        ServerPlayerEntity p = c.getSource().getPlayerOrThrow();
+        MindHost host = MindHost.get();
+        if (host == null) return 0;
+        if (on != null) host.setConsent(p.getUuid(), on);
+        boolean now = host.hasConsent(p.getUuid());
+        boolean remote = host.config().anyRemoteProvider();
+        String msg = (now ? "Settlers' AI may hear your chat." : "Settlers hear that you spoke, but not your words.")
+                + (remote ? " (Your words are sent to the configured AI provider only if you opt in: /hk consent on|off)"
+                          : " (No AI provider is configured; nothing leaves this server.)");
+        c.getSource().sendFeedback(() -> Text.literal(msg), false);
+        return 1;
     }
 
     private static void ok(CommandContext<ServerCommandSource> c, SettlerEntity s, String msg) {

@@ -1,6 +1,10 @@
 package dev.hearthkin.entity;
 
+import dev.hearthkin.mind.Decision;
+import dev.hearthkin.skill.GoToSkill;
+import dev.hearthkin.skill.MineBlockSkill;
 import dev.hearthkin.skill.Outcome;
+import dev.hearthkin.skill.WaitSkill;
 import dev.hearthkin.skill.Skill;
 import net.minecraft.block.BlockState;
 import net.minecraft.entity.EntityType;
@@ -31,10 +35,14 @@ import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
 import net.minecraft.util.ItemScatterer;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -72,6 +80,16 @@ public class SettlerEntity extends PathAwareEntity {
 
     private @Nullable Skill activeSkill;
     private @Nullable Outcome lastOutcome;
+
+    /** Steps chosen by the mind, executed in order. */
+    private final Deque<Decision.Step> plan = new ArrayDeque<>();
+    private @Nullable Decision.Step currentStep;
+    /** Player to follow in FOLLOW mode; null means the owner. */
+    private @Nullable String followTarget;
+    private long lastHurtReport;
+
+    /** Installed by the mind host; the body works without one. */
+    public static SettlerEvents events = SettlerEvents.NONE;
 
     public SettlerEntity(EntityType<? extends PathAwareEntity> type, World world) {
         super(type, world);
@@ -112,7 +130,12 @@ public class SettlerEntity extends PathAwareEntity {
             if (outcome != null) {
                 lastOutcome = outcome;
                 activeSkill = null;
+                finishStep(outcome);
             }
+            return;
+        }
+        if (!plan.isEmpty()) {
+            startStep(plan.pollFirst());
             return;
         }
         if (mode == Mode.FOLLOW) followOwner();
@@ -152,7 +175,7 @@ public class SettlerEntity extends PathAwareEntity {
     }
 
     private void followOwner() {
-        PlayerEntity owner = getOwnerPlayer();
+        PlayerEntity owner = followTarget == null ? getOwnerPlayer() : findPlayer(followTarget);
         if (owner == null || owner.getWorld() != getWorld()) return;
         double d = squaredDistanceTo(owner);
         if (d > 9.0 && (getNavigation().isIdle() || age % 20 == 0)) {
@@ -162,6 +185,77 @@ public class SettlerEntity extends PathAwareEntity {
         }
     }
 
+    // ------------------------------------------------------------------ plans from the mind
+
+    /** Replace the current plan with steps chosen by the mind. */
+    public void setPlan(List<Decision.Step> steps) {
+        if (activeSkill != null) {
+            Outcome cancelled = activeSkill.cancel(this);
+            activeSkill = null;
+            lastOutcome = cancelled;
+        }
+        currentStep = null;
+        plan.clear();
+        plan.addAll(steps);
+    }
+
+    private void startStep(Decision.Step step) {
+        currentStep = step;
+        switch (step.kind()) {
+            case "mine" -> activeSkill = new MineBlockSkill(new BlockPos(step.x(), step.y(), step.z()));
+            case "go_to" -> activeSkill = new GoToSkill(new BlockPos(step.x(), step.y(), step.z()));
+            case "wait" -> activeSkill = new WaitSkill(step.seconds() == null ? 5 : step.seconds());
+            case "follow" -> {
+                PlayerEntity target = step.target() == null ? null : findPlayer(step.target());
+                if (target == null) {
+                    finishStep(Outcome.fail("target_missing", "can't see " + step.target()));
+                } else {
+                    followTarget = isOwner(target) ? null : target.getGameProfile().getName();
+                    mode = Mode.FOLLOW;
+                    finishStep(Outcome.ok("following " + target.getGameProfile().getName()));
+                }
+            }
+            case "stay" -> {
+                mode = Mode.STAY;
+                getNavigation().stop();
+                finishStep(Outcome.ok("staying"));
+            }
+            default -> finishStep(Outcome.fail("unknown_step", step.kind()));
+        }
+    }
+
+    private void finishStep(Outcome outcome) {
+        Decision.Step step = currentStep;
+        currentStep = null;
+        lastOutcome = outcome;
+        if (step == null) return;
+        boolean failed = outcome.status() != Outcome.Status.SUCCEEDED;
+        if (failed) plan.clear(); // later steps depended on this one
+        events.onStepFinished(this, step, outcome, plan.isEmpty());
+    }
+
+    private @Nullable PlayerEntity findPlayer(String name) {
+        for (PlayerEntity p : getWorld().getPlayers()) {
+            if (p.getGameProfile().getName().equalsIgnoreCase(name) && p.squaredDistanceTo(this) < 48 * 48) return p;
+        }
+        return null;
+    }
+
+    /** True when the body has nothing to do: the mind may decide how to spend the time. */
+    public boolean isIdleForMind() {
+        return !paused && activeSkill == null && plan.isEmpty() && eatingTicks == 0;
+    }
+
+    public String describeActivity() {
+        if (paused) return "paused by your owner";
+        if (eatingTicks > 0) return "eating";
+        if (activeSkill != null) return activeSkill.name() + " (" + activeSkill.phase() + ")";
+        if (mode == Mode.FOLLOW) return "following " + (followTarget == null ? "your owner" : followTarget);
+        return "standing around";
+    }
+
+    public List<Decision.Step> getPlan() { return List.copyOf(plan); }
+
     // ------------------------------------------------------------------ skills
 
     public void startSkill(Skill skill) {
@@ -170,6 +264,8 @@ public class SettlerEntity extends PathAwareEntity {
     }
 
     public void cancelSkill() {
+        plan.clear();
+        currentStep = null;
         if (activeSkill != null) {
             lastOutcome = activeSkill.cancel(this);
             activeSkill = null;
@@ -278,6 +374,7 @@ public class SettlerEntity extends PathAwareEntity {
 
     /** Drop everything carried and remove the settler without loss. */
     public void dismiss() {
+        events.onDismissed(this);
         cancelSkill();
         dropInventory();
         for (EquipmentSlot slot : EquipmentSlot.values()) {
@@ -331,7 +428,7 @@ public class SettlerEntity extends PathAwareEntity {
     }
 
     public Mode getMode() { return mode; }
-    public void setMode(Mode mode) { this.mode = mode; getNavigation().stop(); }
+    public void setMode(Mode mode) { this.mode = mode; this.followTarget = null; getNavigation().stop(); }
     public boolean isPaused() { return paused; }
 
     public void setPaused(boolean paused) {
@@ -346,7 +443,15 @@ public class SettlerEntity extends PathAwareEntity {
     public boolean damage(DamageSource source, float amount) {
         // Owners can't accidentally hurt their settlers.
         if (source.getAttacker() instanceof PlayerEntity p && isOwner(p)) return false;
-        return super.damage(source, amount);
+        boolean hurt = super.damage(source, amount);
+        if (hurt && !getWorld().isClient && age - lastHurtReport > 100) {
+            lastHurtReport = age;
+            String by = source.getAttacker() instanceof PlayerEntity p ? p.getGameProfile().getName()
+                    : source.getAttacker() != null ? source.getAttacker().getType().getName().getString()
+                    : source.getName();
+            events.onHurt(this, by, amount);
+        }
+        return hurt;
     }
 
     @Override public boolean cannotDespawn() { return true; }

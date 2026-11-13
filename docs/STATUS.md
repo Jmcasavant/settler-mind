@@ -1,28 +1,47 @@
-# Status: spike 0.1.0 (2026-11-13)
+# Status: 0.1.0 (2026-11-13)
 
-Pinned: Minecraft 1.20.1, Yarn 1.20.1+build.10, Fabric Loader 0.16.14, Fabric API 0.92.12+1.20.1, Loom 1.11.8, Gradle 8.14.3, Java release 17.
+Pinned: Minecraft 1.20.1, Yarn 1.20.1+build.10, Fabric Loader 0.16.14, Fabric API 0.92.12+1.20.1,
+Fabric Language Kotlin 1.14.2 (runtime for the SDK), Anthropic Java SDK 3.8.0, Loom 1.11.8, Gradle
+8.14.3, Java release 17.
 
-## Verified (in-world game tests on a headless dedicated server: 8/8 pass)
+## Verified
 
-- Mines a log, and succeeds only when exactly 1 oak log is in the inventory and the block is gone.
-- Picks the best tool from its inventory; the pickaxe takes durability damage; stone yields cobblestone.
-- Stone mined by hand yields nothing, and this is reported as `PARTIAL(broken_not_collected)`, not success.
-- Bedrock is refused with `FAILED(unbreakable)` and left intact.
-- A block swapped mid-mining is detected as `FAILED(target_changed)`, with no items gained.
-- Eats bread when hungry and skips rotten flesh unless starving.
-- NBT save and load keeps identity, name, food and inventory, with no duplication; an in-flight skill reloads as `UNCERTAIN`.
-- Dismissal drops every carried item exactly once.
+**Mind unit tests: 13/13 pass** (`./gradlew test`, no Minecraft needed)
+- Relevant memories beat recent trivia; forgetting spares reflections and lessons.
+- The trust boundary rejects unknown actions and blocks the settler can't see, strips links and
+  formatting codes, survives non-JSON, and caps steps per decision.
+- The owner's polite request gets a plan; a disagreeable settler refuses a stranger.
+- A reply loop between two speakers is capped without model calls; repeated lines aren't spoken twice.
+- Failures become lessons that appear in the next prompt.
+- One compliment doesn't make a friendship.
+- The system prompt stays byte-identical between calls (cache-friendly).
+- The full mind survives a JSON save/load round trip.
+
+**In-world game tests: 9/9 pass** (`./gradlew runGametest`, headless dedicated server)
+- Body: mining with verified pickup, best tool, stone by hand reported as PARTIAL, bedrock refused,
+  block changed mid-mine detected, eating and food choice, save/load without duplication, dismissal
+  without item loss.
+- **End to end with the offline mind:**
+  1. Heard "Tess, could you chop that log please?"
+  2. Decided (logged `<Tess> On it.`) and the plan passed validation.
+  3. Mined and collected the log; the outcome was verified.
+  4. Memories formed for what was heard, what it decided, and what it did. Affinity for the speaker rose.
+
+**Build:** the mod jar nests 21 SDK runtime libraries. Kotlin comes from Fabric Language Kotlin, not bundled.
 
 ## Not yet verified
 
-- **Rendering and client join.** The client code compiles but has not been looked at in a real client.
-- **Homestead clone.** Not tested. Settlers will refuse block changes there until an Open Parties and Claims adapter exists (fail-closed by design).
-- Pathfinding over real terrain, combat and fleeing, and chunk unloading.
-- Multiplayer: two owners, and an owner going offline.
-- Performance with spark.
+- **Claude backend live.** `ClaudeCognition` compiles against SDK 3.8.0, but no real call has been
+  made (no API key in this environment). Next: one capped live run, checking structured output, cache
+  hits and the ledger figures.
+- In a real client: rendering, the chat experience, how it feels.
+- Homestead clone: whether ~314 mods tolerate the nested SDK libraries (Jackson, OkHttp) and FLK
+  versions. Claims are fail-closed (settlers won't mine) until the Open Parties and Claims adapter exists.
+- Long runs: memory growth, reflection quality, cost per settler-hour.
+- Multiple settlers talking together over time (loop caps are unit-tested only).
 
-## Next
+## Next (see docs/MIND.md backlog)
 
-1. Run on a clone of Homestead: does it load among ~314 mods, and how do the other mods react to `FakePlayer`?
-2. Open Parties and Claims adapter built against its real API jar, then the tests "own claim allowed / someone else's claim denied".
-3. More skills (craft via recipe registry, place, deposit, farm), then the plan schema and validator, then the LLM.
+1. Live Claude run (needs a key) → fill docs/MODELS.md with measured numbers.
+2. Evaluation harness (interviews, ablations, diffusion, persona fidelity).
+3. Coordination board; danger preemption; `chat` route; local-model provider.

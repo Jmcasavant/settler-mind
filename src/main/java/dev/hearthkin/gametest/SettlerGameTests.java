@@ -1,6 +1,9 @@
 package dev.hearthkin.gametest;
 
 import dev.hearthkin.Hearthkin;
+import dev.hearthkin.ai.MindHost;
+import dev.hearthkin.mind.Memory;
+import dev.hearthkin.mind.Mind;
 import dev.hearthkin.entity.SettlerEntity;
 import dev.hearthkin.skill.MineBlockSkill;
 import dev.hearthkin.skill.Outcome;
@@ -183,6 +186,27 @@ public final class SettlerGameTests implements FabricGameTest {
             if (cobble != 20 || axes != 1) throw new GameTestException("dropped " + cobble + " cobble, " + axes + " axes");
             if (s.isAlive()) throw new GameTestException("settler should be gone");
             ctx.complete();
+        });
+    }
+
+    @GameTest(templateName = EMPTY_STRUCTURE, tickLimit = 500)
+    public void hearsRequestDecidesActsAndRemembers(TestContext ctx) {
+        // Full loop with the offline mind: hear -> think -> validated plan -> skill -> verified outcome -> memory.
+        SettlerEntity s = settler(ctx);
+        ctx.setBlockState(LOG, Blocks.OAK_LOG);
+        MindHost host = MindHost.get();
+        if (host == null) throw new GameTestException("mind host not running");
+        Mind mind = host.mindFor(s);
+        mind.setOwnerName("Alex");
+        host.hear(s, "Alex", "player", "Tess, could you chop that log please?", true, true);
+        until(ctx, 480, () -> {
+            ctx.expectBlock(Blocks.AIR, LOG);
+            if (count(s, Items.OAK_LOG) != 1) throw new GameTestException("log not collected");
+            boolean heard = mind.memory().all().stream().anyMatch(m -> m.kind() == Memory.Kind.DIALOGUE && m.text().contains("Alex said"));
+            boolean decided = mind.memory().all().stream().anyMatch(m -> m.kind() == Memory.Kind.DECISION && m.text().contains("mine the block"));
+            boolean did = mind.memory().all().stream().anyMatch(m -> m.kind() == Memory.Kind.EVENT && m.text().contains("succeeded"));
+            if (!heard || !decided || !did) throw new GameTestException("memory incomplete: heard=" + heard + " decided=" + decided + " did=" + did);
+            if (mind.relationships().get("Alex").affinity <= 0.35) throw new GameTestException("politeness not noticed");
         });
     }
 }

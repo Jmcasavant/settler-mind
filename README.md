@@ -1,7 +1,9 @@
 # Hearthkin (working title)
 
 AI settlers for Minecraft (Fabric 1.20.1): inhabitants that live, work and remember.
-This is the **spike** build: body, skills and protection only. No LLM yet.
+Settlers have personalities, needs, memories, relationships and daily plans. They hear chat,
+decide for themselves (including saying no), act through verified skills, and learn from failure.
+Read `AGENTS.md` first if you're working on the code.
 
 ## Build and test
 
@@ -21,9 +23,20 @@ Requires JDK 17+ (builds target Java 17).
 | `/hk mine <name> <x y z>` | Walk there, mine with the best tool carried, collect drops |
 | `/hk status <name>` | Health, food, current skill and phase, last verified outcome, inventory |
 | `/hk follow\|stay\|pause\|resume\|stop <name>` | Control |
-| `/hk dismiss <name>` | Drops everything carried, then leaves |
+| `/hk dismiss <name>` | Drops everything carried, then leaves (their mind is deleted) |
+| *say their name in chat* | e.g. "Tess, could you chop that log?" They decide whether and how to respond |
+| `/hk mind <name>` | Personality, mood, needs, summary, today's intentions, relationships, lessons, recent memories |
+| `/hk consent on\|off` | Allow your chat to be sent to a remote AI provider (off by default) |
+| `/hk usage` | (op) AI calls, tokens, latency and estimated cost per route and model |
 | Right-click with an item / sneak + right-click | Give item / open their inventory (owner only) |
 
 Players need the mod installed on the client too (custom entity).
 
-See `docs/DESIGN.md` for the architecture and `docs/STATUS.md` for what is verified.
+## AI configuration
+
+`config/hearthkin.json` is created on first start. By default every route uses the free, offline
+`scripted` mind. To use Claude, set `"provider": "claude"` on a route and export `ANTHROPIC_API_KEY`
+before starting the server. Budgets cap calls and estimated spend; when a cap is reached, settlers fall
+back to the scripted mind. See `docs/MODELS.md`.
+
+See `docs/MIND.md` for how settlers think, `docs/DESIGN.md` for the architecture and `docs/STATUS.md` for what is verified.

@@ -25,13 +25,12 @@ import java.util.stream.Collectors;
  * "block broke but nothing was collected" false success.
  */
 public final class MineBlockSkill implements Skill {
-    private static final double REACH = 4.5;
-    private static final int APPROACH_TIMEOUT = 20 * 20;
     private static final int COLLECT_TIMEOUT = 20 * 4;
 
     private enum Phase { APPROACH, BREAK, COLLECT }
 
     private final BlockPos target;
+    private final Approach approach;
     private Phase phase = Phase.APPROACH;
     private int phaseTicks;
     private float progress;
@@ -40,6 +39,7 @@ public final class MineBlockSkill implements Skill {
 
     public MineBlockSkill(BlockPos target) {
         this.target = target.toImmutable();
+        this.approach = new Approach(this.target);
     }
 
     @Override public String name() { return "mine " + target.toShortString(); }
@@ -61,21 +61,15 @@ public final class MineBlockSkill implements Skill {
         BlockState state = world.getBlockState(target);
         if (state.isAir()) return Outcome.fail("target_missing", "nothing to mine");
         if (state.getHardness(world, target) < 0) return Outcome.fail("unbreakable", id(state));
-        if (inReach(s)) {
-            s.getNavigation().stop();
-            String denied = BorrowedHands.with(s, fake -> ProtectionGuard.checkModify(world, fake, target));
-            if (denied != null) return Outcome.fail(denied, target.toShortString());
-            s.equipBestToolFor(state);
-            expected = state;
-            before = s.inventoryCounts();
-            enter(Phase.BREAK);
-            return null;
-        }
-        if (phaseTicks > APPROACH_TIMEOUT) return Outcome.fail("path_blocked", "could not reach " + target.toShortString());
-        if (s.getNavigation().isIdle() && phaseTicks % 20 == 1) {
-            boolean started = s.getNavigation().startMovingTo(target.getX() + 0.5, target.getY(), target.getZ() + 0.5, 1.0);
-            if (!started && phaseTicks > 40) return Outcome.fail("no_path", target.toShortString());
-        }
+        Outcome walk = approach.tick(s);
+        if (walk == null) return null;
+        if (walk.status() != Outcome.Status.SUCCEEDED) return walk;
+        String denied = BorrowedHands.with(s, fake -> ProtectionGuard.checkModify(world, fake, target));
+        if (denied != null) return Outcome.fail(denied, target.toShortString());
+        s.equipBestToolFor(state);
+        expected = state;
+        before = s.inventoryCounts();
+        enter(Phase.BREAK);
         return null;
     }
 
@@ -85,7 +79,7 @@ public final class MineBlockSkill implements Skill {
             world.setBlockBreakingInfo(s.getId(), target, -1);
             return Outcome.fail("target_changed", "block changed while mining");
         }
-        if (!inReach(s)) {
+        if (!Approach.inReach(s, target)) {
             world.setBlockBreakingInfo(s.getId(), target, -1);
             return Outcome.fail("out_of_reach", "pushed away while mining");
         }
@@ -132,10 +126,6 @@ public final class MineBlockSkill implements Skill {
         s.getWorld().setBlockBreakingInfo(s.getId(), target, -1);
         if (phase == Phase.COLLECT) return Outcome.partial("cancelled_after_break", "block already broken");
         return new Outcome(Outcome.Status.CANCELLED, "cancelled", "");
-    }
-
-    private boolean inReach(SettlerEntity s) {
-        return s.getEyePos().squaredDistanceTo(Vec3d.ofCenter(target)) <= REACH * REACH;
     }
 
     private void enter(Phase next) {

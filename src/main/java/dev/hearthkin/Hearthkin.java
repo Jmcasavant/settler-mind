@@ -1,5 +1,6 @@
 package dev.hearthkin;
 
+import dev.hearthkin.ai.MindHost;
 import dev.hearthkin.command.HearthkinCommands;
 import dev.hearthkin.entity.SettlerEntity;
 import net.fabricmc.api.ModInitializer;
@@ -37,6 +38,7 @@ public final class Hearthkin implements ModInitializer {
         FabricDefaultAttributeRegistry.register(SETTLER, SettlerEntity.createSettlerAttributes());
         CommandRegistrationCallback.EVENT.register(
                 (dispatcher, registryAccess, environment) -> HearthkinCommands.register(dispatcher));
-        LOG.info("Hearthkin spike loaded");
+        MindHost.register();
+        LOG.info("Hearthkin loaded");
     }
 }
