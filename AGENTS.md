@@ -74,5 +74,8 @@ evaluation evidence over intuition, and record the source in docs/MIND.md.
 ./gradlew build          # everything + jar in build/libs
 ```
 
+CI (`.github/workflows/ci.yml`) runs the Fabric Loader pin check and `./gradlew build` (unit + in-world
+tests) on every PR and push to main; test reports and the jar are uploaded as artifacts.
+
 Before finishing a session: run both test suites, update `docs/STATUS.md` with evidence, and note
 any decision in `docs/MIND.md` or `docs/MODELS.md`.

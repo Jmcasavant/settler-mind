@@ -39,6 +39,10 @@ Fabric Language Kotlin 1.13.14+kotlin.2.4.20 (runtime for the SDK; chosen becaus
   different Mixin), causing flaky startup and risking Homestead compatibility. Pinned FLK 1.13.14,
   which needs only loader 0.16.9.
 
+## CI
+
+GitHub Actions runs the loader-pin check, unit tests and in-world game tests on every PR and push to main.
+
 ## Not yet verified
 
 - **Claude backend live.** `ClaudeCognition` compiles against SDK 3.8.0, but no real call has been
