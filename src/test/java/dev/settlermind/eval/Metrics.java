@@ -28,6 +28,45 @@ public final class Metrics {
     public final List<RequestResult> requests = new ArrayList<>();
     private final Map<String, Deque<String[]>> pendingRequests = new LinkedHashMap<>();
 
+    // ------------------------------------------------------------ coordination (docs/BOARD.md "Evaluation")
+    /** Board tasks seeded by the scenario plus any posted during the run. */
+    public int tasksTotal;
+    public int tasksDone;
+    /** Per DONE task: ticks from posting to done. */
+    public final Map<String, Long> ticksToDone = new TreeMap<>();
+    /** Σ min(gathered across settlers, required) / Σ required over the seeded tasks; null when nothing was required. */
+    public Double needsMet;
+    /** Gathered across settlers at the end, per required item. */
+    public final Map<String, Integer> gathered = new TreeMap<>();
+    public int boardPosts;
+    public int claimAttempts;
+    public int claimsGranted;
+    /** Rejected claims by code (stale, not_open, too_many_claims, ...): the CAS doing its job. */
+    public final Map<String, Integer> claimsRejected = new TreeMap<>();
+    /** Granted claims on a task someone else already held. Must stay 0. */
+    public int doubleClaims;
+    public int releases;
+    public int expiredClaims;
+    /** Mines refused because another settler held the block reservation. */
+    public int reservationConflicts;
+    /** Mines whose block was already gone (target_missing): wasted work. */
+    public int wastedWork;
+    /** Final state of every task, e.g. {@code T1 DONE oak_log 3/3 by Fern}. */
+    public final List<String> boardFinal = new ArrayList<>();
+
+    void claim(String code, boolean heldByOther) {
+        claimAttempts++;
+        if ("ok".equals(code)) {
+            claimsGranted++;
+            if (heldByOther) doubleClaims++;
+        } else {
+            claimsRejected.merge(code, 1, Integer::sum);
+        }
+    }
+
+    /** Model calls per DONE task (all routes), or null when no task was done. Set at the end of the run. */
+    public Double callsPerDoneTask;
+
     void call(String route, CognitionResult r) {
         callsByRoute.merge(route, 1, Integer::sum);
         if (!r.ok()) failedCalls++;

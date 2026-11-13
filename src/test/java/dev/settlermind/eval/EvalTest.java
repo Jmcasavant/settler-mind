@@ -78,6 +78,47 @@ class EvalTest {
     }
 
     @Test
+    void cooperationWithTheBoardSplitsWorkWithoutDoubleClaims() {
+        EvalRunner.Result r = EvalRunner.run(opts("cooperation", "full")).get(0);
+        Metrics m = r.metrics();
+        String board = m.boardFinal + " claims " + m.claimsGranted + " rejected " + m.claimsRejected;
+        assertEquals(0, m.doubleClaims, "a task never has two claimants: " + board);
+        assertTrue(m.claimsGranted >= 1, "the scripted mind uses the board when told about it: " + board);
+        assertTrue(m.tasksDone >= 1, "at least one task completed by verified gathering: " + board);
+        assertNotNull(m.needsMet);
+        assertTrue(m.needsMet > 0, "needs met " + m.needsMet + " gathered " + m.gathered);
+        assertEquals(2, m.tasksTotal, board);
+        m.ticksToDone.values().forEach(t -> assertTrue(t > 0 && t <= 6000, "ticks to done " + m.ticksToDone));
+        assertEquals(0, m.parseErrors);
+        assertTrue(m.unfoundedClaims.isEmpty(), m.unfoundedClaims.toString());
+    }
+
+    @Test
+    void cooperationWithoutTheBoardRunsAndNeverClaims() {
+        EvalRunner.Result r = EvalRunner.run(opts("cooperation", "no_board")).get(0);
+        Metrics m = r.metrics();
+        assertEquals(0, m.claimAttempts, "the board is hidden: no claims " + m.claimsRejected);
+        assertEquals(0, m.claimsGranted);
+        assertEquals(0, m.boardPosts);
+        assertEquals(0, m.tasksDone, "nothing is credited without claims: " + m.boardFinal);
+        assertNotNull(m.needsMet, "needs met is measured without the board too");
+        assertEquals(0, m.parseErrors);
+        assertTrue(m.unfoundedClaims.isEmpty(), m.unfoundedClaims.toString());
+    }
+
+    @Test
+    void boardInvariantsHoldInTheSimulation() {
+        // Progress never exceeds count, and every claim attempt is either granted or rejected with a code.
+        Scenario sc = Scenarios.byName("cooperation");
+        Simulation sim = new Simulation(sc, MindFeatures.FULL, route -> new ScriptedCognition(),
+                route -> new RouteConfig("scripted", "scripted", "low", 1000), new UsageLedger(Map.of()), 10_000);
+        sim.run();
+        sim.board.tasks().forEach(t -> assertTrue(t.progress <= t.count, t.id + " progress " + t.progress));
+        assertTrue(sim.metrics.claimsRejected.values().stream().mapToInt(Integer::intValue).sum()
+                + sim.metrics.claimsGranted == sim.metrics.claimAttempts);
+    }
+
+    @Test
     void callBudgetIsAHardStop() {
         EvalRunner.Options o = opts("diffusion", "full");
         o.maxCalls = 5;

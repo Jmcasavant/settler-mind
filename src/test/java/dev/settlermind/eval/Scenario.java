@@ -8,6 +8,7 @@ import java.util.Map;
  * players say and when, and what to measure.
  *
  * @param durationTicks game ticks to simulate (24000 = one Minecraft day)
+ * @param boardTasks    tasks already on the settlement board at tick 0 (empty for most scenarios)
  */
 public record Scenario(
         String name,
@@ -18,7 +19,27 @@ public record Scenario(
         List<Line> script,
         List<Fact> facts,
         List<String> interview,
-        long durationTicks) {
+        long durationTicks,
+        List<TaskSpec> boardTasks) {
+
+    /** A scenario with an empty task board. */
+    public Scenario(String name, String description, List<SettlerSpec> settlers, Map<String, String> blocks,
+                    List<String> playersPresent, List<Line> script, List<Fact> facts, List<String> interview,
+                    long durationTicks) {
+        this(name, description, settlers, blocks, playersPresent, script, facts, interview, durationTicks, List.of());
+    }
+
+    public Scenario {
+        boardTasks = boardTasks == null ? List.of() : List.copyOf(boardTasks);
+    }
+
+    /**
+     * A GATHER task seeded on the board at tick 0 (docs/BOARD.md). {@code item} is the drop id the simulated
+     * body credits (sim blocks drop their own id, except stone, which drops cobblestone).
+     *
+     * @param postedByKind {@code "player"} or {@code "settler"}
+     */
+    public record TaskSpec(String postedBy, String postedByKind, String item, int count, String note) {}
 
     /** @param traits overrides for Big-Five traits (others come from the seed) */
     public record SettlerSpec(String name, long seed, Map<String, Double> traits, String owner, int[] pos) {}

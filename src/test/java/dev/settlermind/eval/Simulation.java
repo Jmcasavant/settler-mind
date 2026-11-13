@@ -8,6 +8,9 @@ import dev.settlermind.mind.MindEvent;
 import dev.settlermind.mind.MindFeatures;
 import dev.settlermind.mind.Perception;
 import dev.settlermind.mind.Persona;
+import dev.settlermind.mind.board.Board;
+import dev.settlermind.mind.board.BoardTask;
+import dev.settlermind.mind.board.TaskView;
 import dev.settlermind.mind.cognition.Cognition;
 import dev.settlermind.mind.cognition.CognitionRequest;
 import dev.settlermind.mind.cognition.CognitionResult;
@@ -34,6 +37,7 @@ public final class Simulation {
     static final int HEARING = 24;
     static final long STEP = 20;              // one simulated second per step
     static final long IDLE_TICKS = 1200;      // a minute of nothing -> idle event
+    static final long BOARD_UPKEEP = 200;     // the host's ~10 s board expire/prune
     /** Blocks that break by hand but drop nothing (the classic false-success trap). */
     static final List<String> NEEDS_PICKAXE = List.of("stone", "iron_ore", "coal_ore");
     private static final Pattern CLAIMS_DONE = Pattern.compile(
@@ -45,6 +49,13 @@ public final class Simulation {
         final int[] pos;
         final Map<String, Integer> inventory = new LinkedHashMap<>();
         final Deque<Decision.Step> plan = new ArrayDeque<>();
+        /**
+         * Task id -> revision as this settler saw it when it made its current plan: the fencing token
+         * {@code claim_task} passes to {@link Board#claim}. Snapshotted at decision time, like the host does.
+         */
+        final Map<String, Integer> seenRevisions = new HashMap<>();
+        /** What the settler perceived for its latest decide call (the board as the mind saw it). */
+        Perception lastDecisionPerception;
         long idleSince;
         long lastSuccessTick = Long.MIN_VALUE;
 
@@ -65,6 +76,9 @@ public final class Simulation {
     final Function<String, RouteConfig> routeConfig;
     final UsageLedger ledger;
     final int maxCalls;
+    final MindFeatures features;
+    /** The settlement board (one per simulation), with the same semantics as the game host. */
+    public final Board board = new Board();
     public final List<LogLine> log = new ArrayList<>();
     public final Metrics metrics = new Metrics();
     long tick;
@@ -79,10 +93,16 @@ public final class Simulation {
         this.routeConfig = routeConfig;
         this.ledger = ledger;
         this.maxCalls = maxCalls;
+        this.features = features;
         for (Scenario.SettlerSpec spec : scenario.settlers()) {
             Persona p = Persona.generate(spec.name(), spec.seed());
             p.traits().putAll(spec.traits());
             agents.put(spec.name(), new Agent(spec.name(), new Mind(spec.name(), p, spec.owner(), features), spec.pos().clone()));
+        }
+        for (Scenario.TaskSpec t : scenario.boardTasks()) {
+            Board.Result r = board.post(t.postedBy(), t.postedByKind(), t.item(), t.count(), t.note(), 0);
+            if (!r.ok()) throw new IllegalArgumentException("scenario " + scenario.name() + " seeds a bad task: " + r.code());
+            log.add(new LogLine(0, t.postedBy(), "board", "posted " + r.task().id + ": gather " + t.count() + " " + t.item()));
         }
     }
 
@@ -92,8 +112,53 @@ public final class Simulation {
         Deque<Scenario.Line> script = new ArrayDeque<>(ordered);
         for (tick = 0; tick <= scenario.durationTicks() && !truncated; tick += STEP) {
             while (!script.isEmpty() && script.peekFirst().tick() <= tick) playerSays(script.pollFirst());
+            if (tick > 0 && tick % BOARD_UPKEEP == 0) boardUpkeep();
             for (Agent a : agents.values()) stepAgent(a);
         }
+        finishBoardMetrics();
+    }
+
+    /** The host's periodic board upkeep: lapsed claims go back to OPEN and their former claimant is told. */
+    private void boardUpkeep() {
+        for (Board.Expired e : board.expire(tick)) {
+            metrics.expiredClaims++;
+            BoardTask t = e.task();
+            log.add(new LogLine(tick, e.formerClaimant(), "board", "claim on " + t.id + " lapsed"));
+            Agent a = agents.get(e.formerClaimant());
+            if (a != null && features.board()) {
+                a.mind.observe(new MindEvent.Board("Your claim on " + t.id + " (gather " + t.count + " "
+                        + t.item + ") lapsed after no progress.", true), tick);
+            }
+        }
+        board.prune(tick);
+    }
+
+    /** Coordination measures at the end of the run (docs/BOARD.md "Evaluation"). */
+    private void finishBoardMetrics() {
+        Map<String, Integer> required = new LinkedHashMap<>();
+        for (Scenario.TaskSpec t : scenario.boardTasks()) required.merge(t.item(), t.count(), Integer::sum);
+        int need = 0, met = 0;
+        for (Map.Entry<String, Integer> e : required.entrySet()) {
+            int got = 0;
+            for (Agent a : agents.values()) got += a.inventory.getOrDefault(e.getKey(), 0);
+            metrics.gathered.put(e.getKey(), got);
+            need += e.getValue();
+            met += Math.min(got, e.getValue());
+        }
+        metrics.needsMet = need == 0 ? null : (double) met / need;
+        metrics.tasksTotal = board.tasks().size();
+        metrics.tasksDone = 0;
+        metrics.ticksToDone.clear();
+        metrics.boardFinal.clear();
+        for (BoardTask t : board.tasks()) {
+            if (t.status == BoardTask.Status.DONE) {
+                metrics.tasksDone++;
+                metrics.ticksToDone.put(t.id, t.doneTick - t.createdTick);
+            }
+            metrics.boardFinal.add(t.id + " " + t.status + " " + t.item + " " + t.progress + "/" + t.count
+                    + (t.claimant == null ? "" : " by " + t.claimant));
+        }
+        metrics.callsPerDoneTask = metrics.tasksDone == 0 ? null : (double) metrics.totalCalls() / metrics.tasksDone;
     }
 
     /** Ask every settler the interview questions, spaced out so reply limits don't interfere. */
@@ -144,6 +209,10 @@ public final class Simulation {
         if (!d.steps().isEmpty()) {
             a.plan.clear();
             a.plan.addAll(d.steps());
+            a.seenRevisions.clear();
+            if (a.lastDecisionPerception != null) {
+                for (TaskView v : a.lastDecisionPerception.board()) a.seenRevisions.put(v.id(), v.revision());
+            }
             log.add(new LogLine(tick, a.name, "plan", d.steps().stream().map(Decision.Step::describe).toList().toString()));
         }
     }
@@ -166,6 +235,7 @@ public final class Simulation {
             DecisionParser.Result parsed = DecisionParser.parse(res.text(), req.perception(), a.mind.features(), a.name);
             metrics.parsed(parsed);
         }
+        if (req.route().equals("decide")) a.lastDecisionPerception = req.perception();
         Decision d = a.mind.onResult(req, res, tick);
         if (!req.route().equals("decide")) {
             log.add(new LogLine(tick, a.name, req.route(), res.ok() ? res.text() : "error: " + res.error()));
@@ -186,12 +256,18 @@ public final class Simulation {
 
     private void execute(Agent a, Decision.Step step) {
         String status = "SUCCEEDED", code = "ok", detail = "";
+        List<BoardTask> credited = List.of();
         switch (step.kind()) {
             case "mine" -> {
                 String k = Scenario.key(step.x(), step.y(), step.z());
                 String id = blocks.get(k);
-                if (id == null) {
+                // Like the host: reserve before breaking; a block someone else is working on fails.
+                if (!board.reserve(k, a.name, tick)) {
+                    status = "FAILED"; code = "reserved"; detail = board.holder(k, tick) + " is working on it";
+                    metrics.reservationConflicts++;
+                } else if (id == null) {
                     status = "FAILED"; code = "target_missing";
+                    metrics.wastedWork++;
                 } else {
                     blocks.remove(k);
                     if (NEEDS_PICKAXE.contains(id) && !a.inventory.containsKey("wooden_pickaxe")) {
@@ -200,11 +276,18 @@ public final class Simulation {
                         String drop = id.equals("stone") ? "cobblestone" : id;
                         a.inventory.merge(drop, 1, Integer::sum);
                         detail = "+1 " + drop;
+                        // Verified gathering is the only thing that moves a task forward.
+                        credited = board.credit(a.name, drop, 1, tick);
                     }
                 }
+                if (!code.equals("reserved")) board.releaseAll(a.name); // mining is instant here: done with the block
             }
             case "go_to" -> { a.pos[0] = step.x(); a.pos[1] = step.y(); a.pos[2] = step.z(); }
             case "follow", "stay", "wait" -> { }
+            case "post_task", "claim_task", "release_task" -> {
+                code = boardStep(a, step);
+                if (!code.equals(Board.OK)) status = "FAILED";
+            }
             default -> { status = "FAILED"; code = "unknown_step"; }
         }
         if (status.equals("SUCCEEDED")) a.lastSuccessTick = tick;
@@ -212,6 +295,40 @@ public final class Simulation {
         metrics.outcome(a.name, step.kind(), status, tick);
         log.add(new LogLine(tick, a.name, "act", step.describe() + " -> " + status + " " + code + (detail.isEmpty() ? "" : " (" + detail + ")")));
         a.mind.observe(new MindEvent.ActionFinished(step.describe(), step.kind(), status, code, detail, a.plan.isEmpty()), tick);
+        for (BoardTask t : credited) {
+            boolean done = t.status == BoardTask.Status.DONE;
+            String text = done ? "Your task " + t.id + " (gather " + t.count + " " + t.item + ") is done."
+                    : "Progress on your task " + t.id + ": " + t.progress + "/" + t.count + " " + t.item + ".";
+            log.add(new LogLine(tick, a.name, "board", text));
+            if (features.board()) a.mind.observe(new MindEvent.Board(text, false), tick);
+        }
+    }
+
+    /** Executes a board step instantly, as the host does, and returns the board's result code. */
+    private String boardStep(Agent a, Decision.Step step) {
+        if (!features.board()) return "no_board"; // the parser already rejects these; keep the sim consistent
+        String id = step.task() == null ? null : step.task().trim().toUpperCase(Locale.ROOT);
+        Board.Result r;
+        switch (step.kind()) {
+            case "post_task" -> {
+                r = board.post(a.name, BoardTask.KIND_SETTLER, step.item(), step.count() == null ? 0 : step.count(), null, tick);
+                if (r.ok()) metrics.boardPosts++;
+            }
+            case "claim_task" -> {
+                BoardTask before = board.task(id);
+                boolean heldByOther = before != null && before.status == BoardTask.Status.CLAIMED
+                        && !a.name.equals(before.claimant);
+                // The fencing token: the revision this settler saw when it decided; unseen tasks can't match.
+                r = board.claim(id, a.name, a.seenRevisions.getOrDefault(id, -1), tick);
+                metrics.claim(r.code(), heldByOther);
+            }
+            default -> {
+                r = board.release(id, a.name, tick);
+                if (r.ok()) metrics.releases++;
+            }
+        }
+        log.add(new LogLine(tick, a.name, "board", step.kind() + " " + (id == null ? step.item() : id) + " -> " + r.code()));
+        return r.code();
     }
 
     Perception perceive(Agent a) {
@@ -220,7 +337,7 @@ public final class Simulation {
             String[] p = k.split(",");
             int x = Integer.parseInt(p[0]), y = Integer.parseInt(p[1]), z = Integer.parseInt(p[2]);
             double d = dist(a.pos, new int[]{x, y, z});
-            if (d <= 10) seen.add(new Perception.SeenBlock(id, x, y, z, d));
+            if (d <= 10) seen.add(new Perception.SeenBlock(id, x, y, z, d, board.holder(k, tick)));
         });
         List<Perception.SeenEntity> ents = new ArrayList<>();
         for (String player : scenario.playersPresent()) {
@@ -233,7 +350,8 @@ public final class Simulation {
         long t = tick % 24000;
         String time = t < 6000 ? "morning" : t < 12000 ? "afternoon" : t < 18000 ? "night" : "late night";
         return new Perception(tick, time, "clear", a.pos.clone(), 20, 20, "nothing", Map.copyOf(a.inventory),
-                a.plan.isEmpty() ? "standing around" : "busy", seen, ents, List.of());
+                a.plan.isEmpty() ? "standing around" : "busy", seen, ents,
+                features.board() ? board.views(a.name, tick) : List.of()); // ablation: no board in sight
     }
 
     private String ownerOf(Agent a) {

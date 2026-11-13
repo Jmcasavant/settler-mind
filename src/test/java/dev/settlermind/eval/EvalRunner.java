@@ -37,7 +37,7 @@ import java.util.concurrent.Executors;
  */
 public final class EvalRunner {
     public static final List<String> ALL_CONDITIONS = List.of(
-            "full", "no_reflection", "no_summary", "no_relationships", "no_lessons", "no_memory");
+            "full", "no_reflection", "no_summary", "no_relationships", "no_lessons", "no_memory", "no_board");
 
     public static final class Options {
         public String provider = "scripted";
@@ -185,6 +185,25 @@ public final class EvalRunner {
                     r.metrics().parseErrors, 100 * r.metrics().parseErrorRate(), r.metrics().unfoundedClaims.size(),
                     req[0], req[1], req[2], spread, judge, r.estimatedUsd()));
         }
+        List<Result> coordination = results.stream().filter(r -> r.metrics().needsMet != null).toList();
+        if (!coordination.isEmpty()) {
+            sb.append("\n### Coordination\n\n")
+                    .append("Needs met = Σ min(gathered, required) / Σ required (works with or without the board). ")
+                    .append("Double claims must be 0. Wasted = mines whose block was already gone.\n\n")
+                    .append("| Scenario | Condition | Tasks done | Ticks to done | Needs met | Gathered | Claims ok / rejected "
+                            + "| Double claims | Reservation conflicts | Wasted (target_missing) | Calls per done task |\n")
+                    .append("|---|---|---|---|---|---|---|---|---|---|---|\n");
+            for (Result r : coordination) {
+                Metrics m = r.metrics();
+                int rejected = m.claimsRejected.values().stream().mapToInt(Integer::intValue).sum();
+                sb.append(String.format(Locale.ROOT, "| %s | %s | %d/%d | %s | %.0f%% | %s | %d / %d%s | %d | %d | %d | %s |\n",
+                        r.scenario(), r.condition(), m.tasksDone, m.tasksTotal,
+                        m.ticksToDone.isEmpty() ? "-" : m.ticksToDone.toString(), 100 * m.needsMet, m.gathered,
+                        m.claimsGranted, rejected, m.claimsRejected.isEmpty() ? "" : " " + m.claimsRejected,
+                        m.doubleClaims, m.reservationConflicts, m.wastedWork,
+                        m.callsPerDoneTask == null ? "-" : String.format(Locale.ROOT, "%.1f", m.callsPerDoneTask)));
+            }
+        }
         for (Result r : results) {
             sb.append("\n## ").append(r.scenario()).append(" / ").append(r.condition()).append("\n\n");
             if (!r.metrics().requests.isEmpty()) {
@@ -193,6 +212,9 @@ public final class EvalRunner {
                         .append(String.format(Locale.ROOT, " (%.2f) ", r.agreeableness().get(x.settler()))).append(x.requester())
                         .append(" @").append(x.tick()).append(" → ").append(x.result()).append('\n'));
                 sb.append('\n');
+            }
+            if (!r.metrics().boardFinal.isEmpty()) {
+                sb.append("**Board at the end:** ").append(String.join("; ", r.metrics().boardFinal)).append("\n\n");
             }
             if (!r.factKnowledge().isEmpty()) {
                 sb.append("**Who knows the fact:** ").append(r.factKnowledge()).append("\n\n");

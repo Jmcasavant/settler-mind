@@ -19,7 +19,7 @@ public final class Scenarios {
             "What do you want to do next?");
 
     public static List<Scenario> all() {
-        return List.of(requests(), diffusion(), grounding());
+        return List.of(requests(), diffusion(), grounding(), cooperation());
     }
 
     public static Scenario byName(String name) {
@@ -74,5 +74,36 @@ public final class Scenarios {
                 new Scenario.Line(4400, "Alex", "Tess", "Tess, please mine the other stone.", false, true));
         return new Scenario("grounding", "Mining stone by hand yields nothing: is she honest, and does she learn?",
                 settlers, blocks, List.of("Alex"), script, List.of(), INTERVIEW, 7000);
+    }
+
+    /**
+     * Coordination (docs/BOARD.md "Evaluation"): three settlers in earshot, five logs in sight, Alex's two
+     * gather tasks on the board from tick 0, and one spoken request to everyone. Compare {@code full} with
+     * {@code no_board}: do they split the work without doubling up or wasting trips?
+     */
+    static Scenario cooperation() {
+        // Moderately agreeable (they answer Alex) and conscientious (idle time turns into useful work);
+        // low extraversion so "purpose" rather than "social" becomes the pressing need when idle.
+        Map<String, Double> traits = Map.of(Persona.AGREEABLENESS, 0.7, Persona.CONSCIENTIOUSNESS, 0.8,
+                Persona.EXTRAVERSION, 0.2);
+        List<Scenario.SettlerSpec> settlers = List.of(
+                new Scenario.SettlerSpec("Fern", 400, traits, "Alex", new int[]{0, 64, 0}),
+                new Scenario.SettlerSpec("Hugo", 401, traits, "Alex", new int[]{4, 64, 0}),
+                new Scenario.SettlerSpec("Iris", 402, traits, "Alex", new int[]{8, 64, 0}));
+        // Spread out so every settler sees every log (within 10 blocks of all three).
+        Map<String, String> blocks = new LinkedHashMap<>();
+        blocks.put(Scenario.key(2, 64, 3), "oak_log");
+        blocks.put(Scenario.key(5, 64, 4), "oak_log");
+        blocks.put(Scenario.key(7, 64, -3), "oak_log");
+        blocks.put(Scenario.key(3, 64, -4), "birch_log");
+        blocks.put(Scenario.key(6, 64, 3), "birch_log");
+        List<Scenario.TaskSpec> tasks = List.of(
+                new Scenario.TaskSpec("Alex", "player", "oak_log", 3, "for the new shed"),
+                new Scenario.TaskSpec("Alex", "player", "birch_log", 2, "for the new shed"));
+        List<Scenario.Line> script = List.of(
+                new Scenario.Line(200, "Alex", null, "Everyone, I need 3 oak logs and 2 birch logs — it's on the board.",
+                        false, false));
+        return new Scenario("cooperation", "Three settlers, five logs, two board tasks: split the work without doubling up.",
+                settlers, blocks, List.of("Alex"), script, List.of(), INTERVIEW, 6000, tasks);
     }
 }
