@@ -1,6 +1,7 @@
 # Harness design: settlers with a life of their own
 
-Status: **direction and owner decisions approved** (2026-11-13); phases not built yet. Basis: owner direction "build the harness, not the
+Status: **direction and owner decisions approved** (2026-11-13); phases not built yet. The purpose it
+serves, and the layers of law and permits it implements, are in docs/GOVERNANCE.md. Basis: owner direction "build the harness, not the
 behaviour" (AGENTS.md), the research survey `docs/research/2026-11-open-ended-harness.md`, and our first
 Claude eval runs (docs/EVAL.md). Nothing here is built yet.
 
@@ -242,8 +243,9 @@ Each phase ships behind `MindFeatures` switches and is measured before and after
 
 ## Owner decisions (approved 2026-11-13: all four as recommended)
 
-1. **World-change scope.** Recommendation:
-   - settlers may change the world only where the claim guard allows;
+1. **World-change scope.** Recommendation (in permit terms: a player's claim is charter-protected, and
+   its owner can grant a permit for it):
+   - settlers may change the world only where the claim guard allows, or where they hold a permit;
    - a daily world-change budget per settler (for example 64 block changes);
    - every change journaled, with `/settler undo` for owners and admins.
 2. **Public text.** Recommendation: allow signs and notes, with the text policy above and an admin
@@ -251,4 +253,5 @@ Each phase ships behind `MindFeatures` switches and is measured before and after
 3. **What settlers hear about.** Recommendation: they notice joins and leaves only when nearby or told,
    like a person would, not server-wide.
 4. **Chests.** Recommendation: a settler may put into any chest it can reach where the claim guard allows
-   interaction. It may take only from its own chests, or from chests their owner has shared.
+   interaction. It may take only from its own chests, or from chests whose holder granted a permit,
+   such as an owner sharing a chest.

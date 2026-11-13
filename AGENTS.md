@@ -8,6 +8,14 @@ Settler Mind (codename) is an AI game mode: **settlers whose minds are the produ
 personalities, needs, memories, relationships and plans; they decide for themselves, talk, refuse,
 gossip, reflect and learn from failure. Minecraft (Fabric 1.20.1) is the first host world.
 
+**The whole point: free will within a world of laws they can shape** (owner direction, 2026-11-13;
+docs/GOVERNANCE.md).
+- Settlers are free to think and act. They're limited the way people are: by the nature of the world,
+  by a small fixed **charter** that protects real people, and by **laws and permits**.
+- Permits can be obtained on their own (ask, trade, agree, earn).
+- Their settlements and towns write their own laws, including the rules for making laws.
+- We build the conditions for a society, never its contents.
+
 **The AI is the point.** Body skills (mining, walking) exist only so minds have something real to
 act with. Do not keep polishing bot primitives at the expense of the mind. Before adding a skill, ask:
 "What does this let a settler *decide, express or learn* that it couldn't before?" If nothing, don't.
@@ -22,9 +30,17 @@ we script. So:
   can form. Then let it decide.
 - Prefer general capabilities over feature-specific ones. A new perception, action or memory type should
   serve many behaviours we haven't thought of. If it serves only one, rethink it.
-- Freedom happens inside the safety rails. Rule 1 below stands: every action is validated and the claim
-  guard fails closed. The safety boundary is the closed set of *kinds* of world interaction, and it
-  grows deliberately.
+- Limits come in layers (docs/GOVERNANCE.md):
+  - **Nature:** the game.
+  - **The charter:** the non-negotiable rules below. Admin-set; settlers can only petition.
+  - **Settlement law:** made by settlers.
+  - **Permits:** obtainable.
+  - **Choice.**
+
+  Only the charter is hard-coded as law. When the validator refuses something, it says what would
+  permit it, so the settler can pursue that path. Grants come from an unmistakable act (a player's
+  click or command, or a holder's record), never from a model reading chat. The kinds of world
+  interaction stay a closed, validated set that grows deliberately.
 - Measure open-endedness, not only scripted pass/fail: diversity, coherence over long runs, and what
   emerges (docs/EVAL.md). The harness design is docs/HARNESS.md (owner-approved).
 
@@ -77,6 +93,7 @@ renaming would need a migration or settlers would vanish.
 | `src/test/java/...` | JUnit tests for the mind (no Minecraft needed). |
 | `src/main/java/dev/settlermind/gametest/` | In-world tests on a headless server. |
 | `docs/MIND.md` | Mind architecture and the research it's based on. Read before changing the mind. |
+| `docs/GOVERNANCE.md` | **The purpose:** free will, the charter, settlement law, permits; the gap list and open owner decisions. Read first after this file. |
 | `docs/HARNESS.md` | The open-ended harness design: event bus, generic verbs over affordances, beliefs, goals, routines, open-endedness evals. Read before adding any perception, action or memory type. |
 | `docs/MODELS.md` | Model and cost strategy. Read before touching providers or routes. |
 | `docs/EVAL.md`, `src/test/java/dev/settlermind/eval/` | Evaluation harness: simulated world, scenarios, ablations, judged interviews, cost. |
@@ -109,6 +126,9 @@ docs/MIND.md's research table and, if it's stale, survey newer work. Prefer appr
 evaluation evidence over intuition, and record the source in docs/MIND.md.
 
 ## Non-negotiable rules
+
+These are the core of the **charter**, the one layer no settler or town can change (docs/GOVERNANCE.md).
+They protect real people and their worlds.
 
 1. **Model output is untrusted.** It only reaches the world through `DecisionParser` validation and a
    closed `ActionCatalog`. Never add commands, op, shell, file, URL or code-execution actions.

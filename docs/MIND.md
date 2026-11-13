@@ -1,5 +1,8 @@
 # The settler mind
 
+The mind serves the mod's purpose (docs/GOVERNANCE.md): free will within a world of laws settlers can
+shape. Where this document and that one differ, GOVERNANCE.md wins, and this one gets updated.
+
 ## Loop
 
 ```text

@@ -5,6 +5,17 @@ decisions are marked **[approved]**; the rest were made by the agent under the w
 
 ## 2026-11-13
 
+- **Purpose: free will within a world of laws settlers can shape** [approved, owner] (docs/GOVERNANCE.md).
+  Limits come in layers:
+  - nature;
+  - a minimal admin-set **charter** that protects real people (the only layer our code enforces as law);
+  - **settlement law**, made by settlers and towns, including their own meta-rules;
+  - **permits**, which settlers can obtain;
+  - choice.
+
+  Refusals name the permit path. Grants need an unmistakable act. Applied across AGENTS.md, the README,
+  MIND.md and HARNESS.md. Six owner decisions remain open in GOVERNANCE.md. *Revert:* those docs.
+
 - **Harness design and its four owner decisions** [approved] (docs/HARNESS.md):
   1. Settlers change the world only where the claim guard allows, within a daily world-change budget per
      settler (about 64), and every change is journaled with `/settler undo`.

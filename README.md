@@ -1,6 +1,10 @@
 # Settler Mind (codename)
 
-AI settlers for Minecraft (Fabric 1.20.1): inhabitants that live, work and remember.
+AI settlers for Minecraft (Fabric 1.20.1) with free will. They think and act for themselves, and
+they're limited the way people are: by the world, by a small charter that protects real players, and by
+laws and permits. They can get permits on their own, and their towns write their own laws. The aim is
+a society that builds its own systems, not one that runs ours (`docs/GOVERNANCE.md`).
+
 Settlers have personalities, needs, memories, relationships and daily plans. They hear chat,
 decide for themselves (including saying no), act through verified skills, and learn from failure.
 Settlers coordinate through a shared **settlement board**: players and settlers post gathering tasks,
