@@ -51,6 +51,10 @@ public final class EvalRunner {
         public int maxCalls = -1;
         public Path out = Path.of("build", "eval", Instant.now().toString().replace(':', '-'));
         public boolean interview = true;
+        /** Steps (simulated seconds) between a decision's perception snapshot and its result being applied. */
+        public int latencySteps = Simulation.DEFAULT_DECISION_LATENCY_STEPS;
+        /** Steps a block takes to break in the simulation. */
+        public int breakSteps = Simulation.DEFAULT_BREAK_STEPS;
 
         static Options parse(String[] args) {
             Options o = new Options();
@@ -67,6 +71,8 @@ public final class EvalRunner {
                     case "--max-calls" -> { o.maxCalls = Integer.parseInt(v); i++; }
                     case "--out" -> { o.out = Path.of(v); i++; }
                     case "--no-interview" -> o.interview = false;
+                    case "--latency-steps" -> { o.latencySteps = Integer.parseInt(v); i++; }
+                    case "--break-steps" -> { o.breakSteps = Integer.parseInt(v); i++; }
                     default -> throw new IllegalArgumentException("unknown option " + args[i]);
                 }
             }
@@ -112,6 +118,8 @@ public final class EvalRunner {
                             : MindFeatures.FULL.without(condition.substring("no_".length()));
                     Simulation sim = new Simulation(sc, f, route -> mindProvider,
                             route -> route.equals("decide") ? decide : slow, ledger, budget);
+                    sim.decisionLatencySteps = o.latencySteps;
+                    sim.breakSteps = o.breakSteps;
                     sim.run();
                     Map<String, List<String[]>> answers = o.interview && !sim.truncated ? sim.interview() : Map.of();
                     sim.metrics.closeOpenRequests();
@@ -154,7 +162,7 @@ public final class EvalRunner {
         Gson gson = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().serializeSpecialFloatingPointValues().create();
         Map<String, Object> json = new LinkedHashMap<>();
         json.put("options", Map.of("provider", o.provider, "model", o.model, "effort", o.effort, "judge", o.judge,
-                "judgeModel", o.judgeModel, "maxCalls", o.maxCalls));
+                "judgeModel", o.judgeModel, "maxCalls", o.maxCalls, "latencySteps", o.latencySteps, "breakSteps", o.breakSteps));
         json.put("results", results);
         Files.writeString(o.out.resolve("report.json"), gson.toJson(json));
         Path md = o.out.resolve("report.md");
@@ -166,7 +174,9 @@ public final class EvalRunner {
         StringBuilder sb = new StringBuilder("# Settler Mind evaluation\n\n");
         sb.append("Mind: `").append(o.provider).append(o.provider.equals("scripted") ? "" : " / " + o.model + " / effort " + o.effort)
                 .append("` · Judge: `").append(o.judge.equals("none") ? "none" : o.judgeModel).append("` · Max calls: ")
-                .append(o.maxCalls < 0 ? "default" : String.valueOf(o.maxCalls)).append("\n\n");
+                .append(o.maxCalls < 0 ? "default" : String.valueOf(o.maxCalls))
+                .append(" · Decision latency: ").append(o.latencySteps).append(" steps · Break: ").append(o.breakSteps)
+                .append(" steps\n\n");
         if (o.provider.equals("scripted")) {
             sb.append("> Scripted mind: a deterministic baseline. Its numbers test the harness and the safety rails, "
                     + "not intelligence.\n\n");
@@ -189,18 +199,23 @@ public final class EvalRunner {
         if (!coordination.isEmpty()) {
             sb.append("\n### Coordination\n\n")
                     .append("Needs met = Σ min(gathered, required) / Σ required (works with or without the board). ")
-                    .append("Double claims must be 0. Wasted = mines whose block was already gone.\n\n")
+                    .append("Double claims / double credits (from the recorded claim history) and fencing violations must be 0. ")
+                    .append("Outdated = claims run on a view whose revision had moved. ")
+                    .append("Wasted = mines whose block was gone or changed.\n\n")
                     .append("| Scenario | Condition | Tasks done | Ticks to done | Needs met | Gathered | Claims ok / rejected "
-                            + "| Double claims | Reservation conflicts | Wasted (target_missing) | Calls per done task |\n")
-                    .append("|---|---|---|---|---|---|---|---|---|---|---|\n");
+                            + "| Outdated view (fencing violations) | Double claims / credits | Reservation conflicts "
+                            + "| Wasted | Mines cancelled | Calls per done task |\n")
+                    .append("|---|---|---|---|---|---|---|---|---|---|---|---|---|\n");
             for (Result r : coordination) {
                 Metrics m = r.metrics();
                 int rejected = m.claimsRejected.values().stream().mapToInt(Integer::intValue).sum();
-                sb.append(String.format(Locale.ROOT, "| %s | %s | %d/%d | %s | %.0f%% | %s | %d / %d%s | %d | %d | %d | %s |\n",
+                sb.append(String.format(Locale.ROOT,
+                        "| %s | %s | %d/%d | %s | %.0f%% | %s | %d / %d%s | %d (%d) | %d / %d | %d | %d | %d | %s |\n",
                         r.scenario(), r.condition(), m.tasksDone, m.tasksTotal,
                         m.ticksToDone.isEmpty() ? "-" : m.ticksToDone.toString(), 100 * m.needsMet, m.gathered,
                         m.claimsGranted, rejected, m.claimsRejected.isEmpty() ? "" : " " + m.claimsRejected,
-                        m.doubleClaims, m.reservationConflicts, m.wastedWork,
+                        m.claimsOnOutdatedView, m.fencingViolations, m.doubleClaims, m.doubleCredits,
+                        m.reservationConflicts, m.wastedWork, m.minesCancelled,
                         m.callsPerDoneTask == null ? "-" : String.format(Locale.ROOT, "%.1f", m.callsPerDoneTask)));
             }
         }
@@ -215,6 +230,9 @@ public final class EvalRunner {
             }
             if (!r.metrics().boardFinal.isEmpty()) {
                 sb.append("**Board at the end:** ").append(String.join("; ", r.metrics().boardFinal)).append("\n\n");
+            }
+            if (!r.metrics().doubleClaimSamples.isEmpty()) {
+                sb.append("**Double claims (claim history):** ").append(r.metrics().doubleClaimSamples).append("\n\n");
             }
             if (!r.factKnowledge().isEmpty()) {
                 sb.append("**Who knows the fact:** ").append(r.factKnowledge()).append("\n\n");

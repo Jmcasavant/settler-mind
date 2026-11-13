@@ -43,25 +43,54 @@ public final class Metrics {
     public int claimsGranted;
     /** Rejected claims by code (stale, not_open, too_many_claims, ...): the CAS doing its job. */
     public final Map<String, Integer> claimsRejected = new TreeMap<>();
-    /** Granted claims on a task someone else already held. Must stay 0. */
+    /**
+     * Grants made while another settler's claim on the same task was still open, derived at the end of the
+     * run from {@link #claimHistory} (not from the board's state). Must stay 0.
+     */
     public int doubleClaims;
+    /** Samples of the overlaps behind {@link #doubleClaims}. */
+    public final List<String> doubleClaimSamples = new ArrayList<>();
+    /** Extra verified gains from a block that had already yielded (two settlers credited for one block). Must stay 0. */
+    public int doubleCredits;
+    /** Every claim/release/lapse/done/cancel and every verified block gain, in order. */
+    public final ClaimHistory claimHistory = new ClaimHistory();
+    /**
+     * Claims carried out on an outdated view: the task's revision when the claim ran differed from the one in
+     * the perception the decision was made from (decision latency, or the plan's earlier steps taking time).
+     */
+    public int claimsOnOutdatedView;
+    /** Outdated-view claims that were granted anyway: revision fencing failed. Must stay 0. */
+    public int fencingViolations;
+    /** Rejected settler posts by code (e.g. invalid_item). */
+    public final Map<String, Integer> postsRejected = new TreeMap<>();
     public int releases;
     public int expiredClaims;
     /** Mines refused because another settler held the block reservation. */
     public int reservationConflicts;
-    /** Mines whose block was already gone (target_missing): wasted work. */
+    /** Mines whose block was already gone (target_missing) or changed while breaking (target_changed): wasted work. */
     public int wastedWork;
+    /** Mines abandoned part-way because a new decision replaced the plan (the host cancels the running skill). */
+    public int minesCancelled;
     /** Final state of every task, e.g. {@code T1 DONE oak_log 3/3 by Fern}. */
     public final List<String> boardFinal = new ArrayList<>();
 
-    void claim(String code, boolean heldByOther) {
+    void claim(String code, boolean outdatedView) {
         claimAttempts++;
+        if (outdatedView) claimsOnOutdatedView++;
         if ("ok".equals(code)) {
             claimsGranted++;
-            if (heldByOther) doubleClaims++;
+            if (outdatedView) fencingViolations++;
         } else {
             claimsRejected.merge(code, 1, Integer::sum);
         }
+    }
+
+    /** Derive the history-based measures (call once the run is over). */
+    void deriveFromHistory() {
+        doubleClaims = claimHistory.doubleClaims();
+        doubleClaimSamples.clear();
+        doubleClaimSamples.addAll(claimHistory.doubleClaimSamples(5));
+        doubleCredits = claimHistory.doubleCredits();
     }
 
     /** Model calls per DONE task (all routes), or null when no task was done. Set at the end of the run. */
