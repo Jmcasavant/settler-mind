@@ -1,10 +1,10 @@
-# AGENTS.md: instructions for coding agents working on Hearthkin
+# AGENTS.md: instructions for coding agents working on Settler Mind
 
 Read this first. It is the contract for every session (Claude Code, Codex, others).
 
 ## What this project is
 
-Hearthkin (working title) is an AI game mode: **settlers whose minds are the product**. They have
+Settler Mind (codename) is an AI game mode: **settlers whose minds are the product**. They have
 personalities, needs, memories, relationships and plans; they decide for themselves, talk, refuse,
 gossip, reflect and learn from failure. Minecraft (Fabric 1.20.1) is the first host world.
 
@@ -12,16 +12,23 @@ gossip, reflect and learn from failure. Minecraft (Fabric 1.20.1) is the first h
 act with. Do not keep polishing bot primitives at the expense of the mind. Before adding a skill, ask:
 "What does this let a settler *decide, express or learn* that it couldn't before?" If nothing, don't.
 
+## Naming
+
+"Settler Mind" / `settler-mind` is a **codename**; the public name is undecided. Changing display text
+and docs is free. **Do not change the mod id `settlermind`** (or registry ids like `settlermind:settler`,
+the `settlermind_minds` save file, or NBT keys) once real worlds use the mod: saves store them, and
+renaming would need a migration or settlers would vanish.
+
 ## Layout
 
 | Path | What |
 |---|---|
-| `src/main/java/dev/hearthkin/mind/` | **The mind.** Engine-agnostic: no Minecraft imports. Persona, Needs, MemoryStream, Relationships, Lessons, Prompts, DecisionParser (trust boundary), Mind (when and what to think). |
+| `src/main/java/dev/settlermind/mind/` | **The mind.** Engine-agnostic: no Minecraft imports. Persona, Needs, MemoryStream, Relationships, Lessons, Prompts, DecisionParser (trust boundary), Mind (when and what to think). |
 | `.../mind/cognition/` | Model providers behind `Cognition`: `ScriptedCognition` (offline, free, deterministic), `ClaudeCognition` (official Anthropic Java SDK). `UsageLedger` measures cost. |
-| `src/main/java/dev/hearthkin/ai/` | Bridge to Minecraft: `MindHost` (event loop, budgets, chat), `PerceptionBuilder`, `MindStore` (minds saved in the world save), `HearthkinConfig`. |
-| `src/main/java/dev/hearthkin/entity/`, `skill/`, `protection/` | The body: entity, verified skills, fail-closed claim guard. |
+| `src/main/java/dev/settlermind/ai/` | Bridge to Minecraft: `MindHost` (event loop, budgets, chat), `PerceptionBuilder`, `MindStore` (minds saved in the world save), `SettlerMindConfig`. |
+| `src/main/java/dev/settlermind/entity/`, `skill/`, `protection/` | The body: entity, verified skills, fail-closed claim guard. |
 | `src/test/java/...` | JUnit tests for the mind (no Minecraft needed). |
-| `src/main/java/dev/hearthkin/gametest/` | In-world tests on a headless server. |
+| `src/main/java/dev/settlermind/gametest/` | In-world tests on a headless server. |
 | `docs/MIND.md` | Mind architecture and the research it's based on. Read before changing the mind. |
 | `docs/MODELS.md` | Model and cost strategy. Read before touching providers or routes. |
 | `docs/STATUS.md` | What is verified and what isn't. Keep it honest and current. |
@@ -29,9 +36,9 @@ act with. Do not keep polishing bot primitives at the expense of the mind. Befor
 ## Model choice: open, measured, never hard-coded
 
 - Every kind of thinking is a **route** (`decide`, `reflect`, `plan`; more may come). Each route picks
-  provider, model, effort and token cap in `config/hearthkin.json`. **No model id is baked into
+  provider, model, effort and token cap in `config/settlermind.json`. **No model id is baked into
   logic.** New providers implement `Cognition`.
-- We have **not** settled on models. Choose per route from measurements: `/hk usage` (calls, tokens,
+- We have **not** settled on models. Choose per route from measurements: `/settler usage` (calls, tokens,
   latency, cache hits, estimated $) plus believability evals (docs/MIND.md). Re-evaluate when prices,
   models or features change. Cheaper is not automatically better: measure cost per *good* decision.
 - The default config is free and offline (`scripted`). Paid inference is opt-in, budget-capped
@@ -50,12 +57,14 @@ evaluation evidence over intuition, and record the source in docs/MIND.md.
    closed `ActionCatalog`. Never add commands, op, shell, file, URL or code-execution actions.
 2. **Never claim success without verification.** Skills return SUCCEEDED only when the game confirms it.
 3. **No model calls on the server thread.** Async on the mind executor; apply via `server.execute`.
-4. **Privacy:** players' chat goes to a remote provider only after `/hk consent on`. No keys in
+4. **Privacy:** players' chat goes to a remote provider only after `/settler consent on`. No keys in
    config or logs; keys come from environment variables.
 5. **Fail closed** on claims/protection uncertainty.
 6. **Never touch the live Homestead server** or its saves. Test on clones only.
 7. **Java 17 language level** (Homestead runtime): no pattern-matching `switch`, etc.
-8. Don't skip or weaken a failing test to get green; fix the cause or record it in docs/STATUS.md.
+8. **Keep the Fabric Loader pin.** Check `./gradlew dependencies --configuration runtimeClasspath | grep fabric-loader`
+   after changing dependencies; a library must not silently raise it above what Homestead runs.
+9. Don't skip or weaken a failing test to get green; fix the cause or record it in docs/STATUS.md.
 
 ## Build and test
 

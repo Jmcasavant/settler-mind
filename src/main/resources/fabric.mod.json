@@ -1,23 +1,23 @@
 {
   "schemaVersion": 1,
-  "id": "hearthkin",
+  "id": "settlermind",
   "version": "${version}",
-  "name": "Hearthkin (working title)",
+  "name": "Settler Mind (codename)",
   "description": "AI settlers with personalities, needs, memories and relationships. They decide for themselves, talk, remember, and learn from failure.",
   "authors": [
-    "Hearthkin contributors"
+    "SettlerMind contributors"
   ],
   "license": "All-Rights-Reserved",
   "environment": "*",
   "entrypoints": {
     "main": [
-      "dev.hearthkin.Hearthkin"
+      "dev.settlermind.SettlerMind"
     ],
     "client": [
-      "dev.hearthkin.client.HearthkinClient"
+      "dev.settlermind.client.SettlerMindClient"
     ],
     "fabric-gametest": [
-      "dev.hearthkin.gametest.SettlerGameTests"
+      "dev.settlermind.gametest.SettlerGameTests"
     ]
   },
   "depends": {

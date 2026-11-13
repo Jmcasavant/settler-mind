@@ -1,6 +1,6 @@
 # Models and cost: strategy
 
-**Status: undecided on purpose.** Hearthkin does not commit to one model. Choices are made per route,
+**Status: undecided on purpose.** Settler Mind does not commit to one model. Choices are made per route,
 from measurements, and revisited as the game, the prompts and the model market change.
 
 ## How it works
@@ -15,11 +15,11 @@ from measurements, and revisited as the game, the prompts and the model market c
 
   Likely future routes: `chat` (pure conversation, no actions), `summarize` (memory compaction).
 
-- **Config, not code.** `config/hearthkin.json` → `routes`. Change a route's model and restart; no rebuild.
+- **Config, not code.** `config/settlermind.json` → `routes`. Change a route's model and restart; no rebuild.
 - **Providers.** `scripted` (offline, free) and `claude` (official Anthropic Java SDK, key from the
   `ANTHROPIC_API_KEY` env var). A local-model provider (Ollama/LM Studio) is a planned addition behind
   the same `Cognition` interface.
-- **Measurement.** `/hk usage` shows per route and model: calls, failures, input/output tokens, cache
+- **Measurement.** `/settler usage` shows per route and model: calls, failures, input/output tokens, cache
   reads, average latency, estimated USD (prices in config; update them when they change).
 - **Budgets.** Per settler per hour, per server per hour, and estimated USD per day. When a limit is
   hit, settlers fall back to the scripted mind. They keep working and never freeze.
@@ -40,7 +40,7 @@ Candidates to evaluate per route (prices per million tokens, input/output, as of
 
 **Rough sizing (assumptions, not measurements).** One `decide` call ≈ 2–3k input tokens (system prompt
 cached) + ~300 output. With ~20 calls per settler-hour, 4 settlers ≈ 80 calls/h. Real numbers come
-from `/hk usage`; replace this paragraph with measured figures.
+from `/settler usage`; replace this paragraph with measured figures.
 
 ## How to decide (and re-decide)
 

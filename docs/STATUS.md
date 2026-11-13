@@ -1,7 +1,7 @@
 # Status: 0.1.0 (2026-11-13)
 
 Pinned: Minecraft 1.20.1, Yarn 1.20.1+build.10, Fabric Loader 0.16.14, Fabric API 0.92.12+1.20.1,
-Fabric Language Kotlin 1.14.2 (runtime for the SDK), Anthropic Java SDK 3.8.0, Loom 1.11.8, Gradle
+Fabric Language Kotlin 1.13.14+kotlin.2.4.20 (runtime for the SDK; chosen because it requires only loader 0.16.9), Anthropic Java SDK 3.8.0, Loom 1.11.8, Gradle
 8.14.3, Java release 17.
 
 ## Verified
@@ -17,7 +17,7 @@ Fabric Language Kotlin 1.14.2 (runtime for the SDK), Anthropic Java SDK 3.8.0, L
 - The system prompt stays byte-identical between calls (cache-friendly).
 - The full mind survives a JSON save/load round trip.
 
-**In-world game tests: 9/9 pass** (`./gradlew runGametest`, headless dedicated server)
+**In-world game tests: 9/9 pass, 6 consecutive runs** (`./gradlew runGametest`, headless dedicated server)
 - Body: mining with verified pickup, best tool, stone by hand reported as PARTIAL, bedrock refused,
   block changed mid-mine detected, eating and food choice, save/load without duplication, dismissal
   without item loss.
@@ -28,6 +28,16 @@ Fabric Language Kotlin 1.14.2 (runtime for the SDK), Anthropic Java SDK 3.8.0, L
   4. Memories formed for what was heard, what it decided, and what it did. Affinity for the speaker rose.
 
 **Build:** the mod jar nests 21 SDK runtime libraries. Kotlin comes from Fabric Language Kotlin, not bundled.
+
+## Fixed during the rename to settler-mind
+
+- **Drops just out of reach:** pathfinding stopped within a block of a drop, sometimes outside pickup
+  range, giving `PARTIAL(broken_not_collected)` about 5 runs in 6 in one test. The settler now steers
+  straight onto drops within 3 blocks. PARTIAL outcomes now say why (nothing dropped / drop vanished /
+  ran out of time).
+- **Loader version creep:** Fabric Language Kotlin 1.14.x pulled Fabric Loader up to 0.19.5 (with a
+  different Mixin), causing flaky startup and risking Homestead compatibility. Pinned FLK 1.13.14,
+  which needs only loader 0.16.9.
 
 ## Not yet verified
 
