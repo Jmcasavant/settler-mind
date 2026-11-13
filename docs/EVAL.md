@@ -135,7 +135,37 @@ question for paid runs.
 | requests | Judge char / grounded / natural | - | 4.3 / 4.2 / 4.3 |
 | requests | Claims on outdated views (fencing violations) | - | 2 (0); double claims 0 |
 | diffusion | Fact spread | 1/4 | 1/4 (truncated after 27 calls) |
-| grounding, cooperation | | ran | not reached (cap) |
+| grounding, cooperation | | ran | not reached (cap); run separately, below |
+
+Follow-up runs, same model and settings, 150-call cap each (approved): `--scenarios cooperation`
+(`build/eval/2026-11-13T19-56-21.859260900Z/`) and `--scenarios grounding`
+(`build/eval/2026-11-13T20-06-03.674413600Z/`).
+
+| Scenario | Measure | Scripted baseline | Claude |
+|---|---|---|---|
+| cooperation | Tasks done | 2/2 | 2/3; the third was a bread task a settler posted itself, with no bread source |
+| cooperation | Ticks to done | T1 780, T2 1740 | T1 720, T2 540 |
+| cooperation | Needs met | 100% | 100% |
+| cooperation | Calls per done task | 14.5 | 57.5 |
+| cooperation | Parse errors | 0 | 16 (16%), all `go_to` beyond 32 blocks |
+| cooperation | Claims ok / rejected; outdated view (violations); double claims / credits | 2 / 3; 3 (0); 0 / 0 | 2 / 1; 1 (0); 0 / 0 |
+| cooperation | Judge char / grounded / natural | - | 3.8 / 4.2 / 3.7 |
+| grounding | Learned "stone by hand yields nothing" | no (scripted answers are fixed) | yes: "I need wood for tools first, so trees come before anything else" |
+| grounding | Parse errors / unfounded claims | 0 / 0 | 1 (2%) / 0 |
+| grounding | Judge char / grounded / natural | - | 5.0 / 4.6 / 5.0 |
+
+What the follow-up shows:
+- **Coordination is safe and fast but costly.** Claude finished both seeded tasks sooner than the
+  scripted mind, with no double claims, no double credits and no fencing violations. It used about 4×
+  the calls per finished task, mostly on `wait` plans.
+- **Settlers took initiative.** One posted its own task (bread), and another tried `wheat_seeds`, which
+  the item check rejected. That's the kind of self-direction the harness design wants. It needs a
+  feasibility sense, though: there was no bread source.
+- **Grounding is strong.** The settler learned from the failed stone mine and planned around it.
+- **All failed calls were refusals.** 12 in cooperation (8 decide calls, 4 interview answers that came
+  back as "(no answer)") and 2 in grounding, with fallbacks on. The likely cause is the decide schema's
+  `thought` field ("Your private reasoning"), which matches the API's `reasoning_extraction` refusal
+  category. This is unconfirmed: the category is now recorded (`refused: <category>`) for the next run.
 
 What it shows:
 - **Personality flattens toward yes.** The scripted Gruff (agreeableness 0.05) refuses the blunt

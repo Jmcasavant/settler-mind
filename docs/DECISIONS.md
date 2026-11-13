@@ -5,6 +5,12 @@ decisions are marked **[approved]**; the rest were made by the agent under the w
 
 ## 2026-11-13
 
+- **Follow-up paid evals** [approved: cooperation and grounding, 150 calls each, about $4]: spent $2.83.
+  Results are in docs/EVAL.md. Refusals now record their category. Proposed next (a mind change that
+  needs an eval before and after, and a paid run, so it needs approval): rephrase the `thought` field as
+  in-character intent instead of "private reasoning", and tell the model the 32-block `go_to` limit.
+  *Revert:* docs; `ClaudeCognition` refusal text.
+
 - **Purpose: free will within a world of laws settlers can shape** [approved, owner] (docs/GOVERNANCE.md).
   Limits come in layers:
   - nature;

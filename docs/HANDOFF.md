@@ -1,7 +1,7 @@
 # Session handoff (local)
 
-Updated 2026-11-13 ~20:00 UTC by a local Claude Code session on Jaren's Windows PC. Read **AGENTS.md
-first** (rules plus the working agreement on what needs owner approval), then this file.
+Updated 2026-11-13 ~21:00 UTC by a local Claude Code session on Jaren's Windows PC. Read **AGENTS.md
+first**, then **docs/GOVERNANCE.md** (the mod's purpose), then this file.
 
 ## Where things stand
 
@@ -13,33 +13,44 @@ first** (rules plus the working agreement on what needs owner approval), then th
 - **Tests:** 73 unit and 13 in-world tests pass locally. In-world: 12 consecutive passing runs. Two
   earlier runs each had one failure while another Gradle build ran at the same time, and the failing
   test wasn't captured (docs/STATUS.md).
-- **First paid eval done:** $2.82 of the approved run. The 200-call cap ran out after `requests` and
-  part of `diffusion`, so `grounding` and `cooperation` didn't run. Results are in docs/MODELS.md
-  ("Measured") and docs/EVAL.md ("First Claude run"). Main findings:
-  - Settlers comply with everything, so agreeableness isn't respected.
-  - Settlers wait and chatter instead of acting.
-  - 9.4% of decisions had parse errors, and 11.7% of calls failed for an unrecorded reason. Failed calls
-    are logged now.
+- **Purpose set by the owner:** free will within a world of laws settlers can shape.
+  - **Layers:** nature, a minimal admin-set charter, settlement law that settlers make, obtainable
+    permits, and choice (docs/GOVERNANCE.md).
+  - **Harness design:** docs/HARNESS.md (approved). It covers the event bus, generic verbs over
+    affordances, beliefs, goals, routines, systems settlers build themselves, and open-endedness evals.
+  - **AGENTS.md** says: build the harness, not the behaviour.
+- **Paid evals done ($5.65 of the approved runs):** all four scenarios, results in docs/EVAL.md and
+  docs/MODELS.md.
+  - **Cost:** about $0.011 per decision, about 4 s each.
+  - **Good:** coordination is safe (0 double claims, 0 fencing violations) and fast. Grounding is strong.
+    Settlers sometimes post their own tasks.
+  - **Problems:**
+    - settlers comply with every request;
+    - they wait and chatter (about 4× the scripted mind's calls per finished task);
+    - parse errors run 9–16%, mostly `go_to` beyond 32 blocks;
+    - 6–9% of calls are refused, likely because the schema asks for "private reasoning". Refusals now
+      record their category.
 - **Built:** the settler mind, model routes with budgets, the eval harness, the settlement board, CI,
   the decision log and the adversarial review.
 
 ## Next steps, in order
 
-1. **Follow-up paid eval (needs owner approval):** run `cooperation` and `grounding` separately, each
-   with its own cap, for example `--scenarios cooperation --max-calls 150`. Check the transcript's
-   `call failed:` lines for the failure cause.
-2. Mind work suggested by the run (docs/MIND.md backlog; run evals before and after each change):
-   - Make agreeableness and the requester's standing actually shape replies to requests.
-   - Discourage idle `wait` and chatter plans.
-   - Tell the model the `follow` and `go_to` limits.
-3. Then the existing backlog: danger preemption, a cheaper `chat` route, a local-model provider, and
-   multi-day drift and cooperation scenarios.
+1. **Mind fixes from the evals** (need a paid before-and-after run, so owner approval):
+   - rephrase the `thought` field as in-character intent;
+   - tell the model the `go_to` limit;
+   - let agreeableness shape replies to requests.
+2. **Harness phase 1** (docs/HARNESS.md "Build order"): open-endedness metrics, the event bus, and
+   multi-day sim runs. Free and offline, so the agent may proceed.
+3. Then phases 2–6, and the governance pieces in docs/GOVERNANCE.md, after its six open owner decisions.
 
 ## Needs owner approval (per AGENTS.md)
 
-- Any further paid run (the approved one is used up).
+- Any further paid run (all approved runs are used up).
+- The six decisions at the end of docs/GOVERNANCE.md: conflict, players and town law, land, new
+  settlers, offscreen life, owner commands.
 - Merging PR #1 to `main` (it's still a draft). GitHub's front-page README updates only after the merge.
 - The `boardAnnouncements` default: `all` today; the agent recommends `nearby`.
+- Pushing: the local permission check blocks unrequested pushes, so ask before `git push`.
 - Anything touching the live Homestead server or its modpack. Next would be testing the jar on a
   *clone* of the pack, which needs an Open Parties and Claims adapter. Until then the claim guard
   fails closed and settlers won't mine.

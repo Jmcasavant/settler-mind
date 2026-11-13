@@ -54,6 +54,11 @@ before grounding and cooperation.
 | Judge (character / grounded / natural, 1–5) | 4.3 / 4.2 / 4.3 over 20 interview answers; 3 were "(no answer)" |
 | Run total | $2.82 estimated ($2.07 decide, $0.60 judge, $0.15 plan + reflect), 14.5 min |
 
+Follow-up runs (cooperation and grounding, 150-call caps, $2.83 together): `decide` cost $0.011 per call
+again, mean latency 4.1 s and 3.8 s. Failures were all **refusals** (12 of 130 and 2 of 64 calls), even
+with `fallbacks: "default"` on. Suspected cause: the schema asks for "private reasoning" (see docs/EVAL.md).
+Combined spend for the three approved runs: $5.65 estimated.
+
 Projection, not a measurement: at ~20 decide calls per settler-hour, 4 settlers on this route cost
 ≈ $0.90 an hour. The 200-call cap counts settler calls only; the judge's 20 calls came on top.
 

@@ -80,7 +80,9 @@ public final class ClaudeCognition implements Cognition {
             String model = msg.model().asString();
 
             if (msg.stopReason().map(r -> r.equals(StopReason.REFUSAL)).orElse(false)) {
-                return new CognitionResult(null, provider(), model, in, out, cacheRead, cacheWrite, ms, "refused");
+                // The category says why (e.g. reasoning_extraction, cyber), so prompts can be fixed from evidence.
+                String category = msg.stopDetails().flatMap(d -> d.category()).map(Object::toString).orElse("uncategorized");
+                return new CognitionResult(null, provider(), model, in, out, cacheRead, cacheWrite, ms, "refused: " + category);
             }
             if (msg.stopReason().map(r -> r.equals(StopReason.MAX_TOKENS)).orElse(false)) {
                 return new CognitionResult(null, provider(), model, in, out, cacheRead, cacheWrite, ms, "max_tokens");
