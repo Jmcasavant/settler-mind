@@ -126,3 +126,17 @@ Compare `full` against `no_board` (same script; the board is hidden from minds).
 4. Board operations never throw on bad input; they return codes.
 5. A save/load round trip preserves everything.
 6. No board step can cause an action outside the closed catalog (the board adds no commands or world edits).
+
+## Clarifications made during implementation (phase 1)
+
+- **Poster limit:** "≤ 5 open tasks per poster" counts OPEN and CLAIMED tasks.
+- **Input checks:** a blank name gives `invalid_name`; item ids are capped at 64 chars; notes are trimmed to 80.
+- **Release:** anything other than a CLAIMED task held by the caller gives `not_yours`.
+- **Cancel:** checks `not_allowed` before `already_closed`. It clears the claimant, so the host reads it first if it wants to notify them.
+- **`closedTick`:** set on DONE or CANCELLED; `prune` uses it.
+- **Revisions:** new tasks start at revision 1. "Oldest first" ties break by id number.
+- **Timing:**
+  - Leases lapse when `tick - lastProgressTick > LEASE_TICKS`.
+  - Reservations expire once their age reaches `RESERVATION_TTL`.
+  - Re-reserving by the same holder refreshes the TTL.
+- **Render:** an OPEN task with partial progress shows `: p/c`; a note is shown as ` ("note")`.
