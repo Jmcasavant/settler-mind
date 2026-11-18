@@ -7,12 +7,15 @@ version = project.mod_version
 group = project.maven_group
 base { archivesName = project.archives_base_name }
 
-repositories { }
+repositories {
+    mavenCentral()
+    maven { name = 'FabricKotlin'; url = 'https://maven.fabricmc.net/' }
+}
 
 loom {
     splitEnvironmentSourceSets()
     mods {
-        hearthkin {
+        settlermind {
             sourceSet sourceSets.main
             sourceSet sourceSets.client
         }
@@ -29,12 +32,52 @@ loom {
     }
 }
 
+configurations {
+    bundled
+    implementation.extendsFrom bundled
+}
+
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
     mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+
+    // Kotlin runtime comes from Fabric Language Kotlin (present in most packs); we never bundle our own.
+    modImplementation "net.fabricmc:fabric-language-kotlin:${project.flk_version}"
+
+    // Claude backend: official Anthropic Java SDK. Its non-Kotlin libraries are nested in our jar.
+    bundled "com.anthropic:anthropic-java:${project.anthropic_version}"
+    // Nested (jar-in-jar) runtime libraries of the SDK. Kotlin, slf4j and JetBrains annotations
+    // are provided by Fabric Language Kotlin / Minecraft. Regenerate with:
+    //   ./gradlew dependencies --configuration bundled
+    include "com.anthropic:anthropic-java:3.8.0"
+    include "com.anthropic:anthropic-java-core:3.8.0"
+    include "com.anthropic:anthropic-java-client-okhttp:3.8.0"
+    include "com.fasterxml.jackson.core:jackson-annotations:2.19.4"
+    include "com.fasterxml.jackson.core:jackson-core:2.19.4"
+    include "com.fasterxml.jackson.core:jackson-databind:2.19.4"
+    include "com.fasterxml.jackson.datatype:jackson-datatype-jdk8:2.19.4"
+    include "com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.19.4"
+    include "com.fasterxml.jackson.module:jackson-module-kotlin:2.19.4"
+    include "com.fasterxml:classmate:1.7.0"
+    include "com.github.victools:jsonschema-generator:4.38.0"
+    include "com.github.victools:jsonschema-module-jackson:4.38.0"
+    include "com.github.victools:jsonschema-module-swagger-2:4.38.0"
+    include "com.squareup.okhttp3:okhttp:4.12.0"
+    include "com.squareup.okio:okio-jvm:3.6.0"
+    include "com.squareup.okio:okio:3.6.0"
+    include "com.standardwebhooks:standardwebhooks:1.2.0"
+    include "io.opentelemetry:opentelemetry-api:1.62.0"
+    include "io.opentelemetry:opentelemetry-common:1.62.0"
+    include "io.opentelemetry:opentelemetry-context:1.62.0"
+    include "io.swagger.core.v3:swagger-annotations:2.2.50"
+
+    testImplementation "org.junit.jupiter:junit-jupiter:5.11.4"
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher"
 }
+
+test { useJUnitPlatform() }
 
 processResources {
     inputs.property "version", project.version
@@ -51,5 +94,41 @@ java {
 
 jar { from("LICENSE") { rename { "${it}_${project.base.archivesName.get()}" } } }
 
+// Every game-test run starts from a fresh world, so tests never depend on a previous run's saved state.
+def gametestWorld = file('build/gametest/world')
+tasks.matching { it.name == 'runGametest' }.configureEach {
+    doFirst {
+        if (gametestWorld.exists() && !gametestWorld.deleteDir()) throw new GradleException("Could not delete ${gametestWorld}")
+    }
+}
+
 // Run game tests as part of `check`.
 check.dependsOn("runGametest")
+
+// Local secrets: a git-ignored .env (see .env.example) is loaded into every Java run task
+// (runEval, runClient, runServer, runGametest). Real environment variables win. Values are never logged.
+def dotenv = [:]
+def envFile = file('.env')
+if (envFile.exists()) {
+    envFile.eachLine { String line ->
+        line = line.trim()
+        int eq = line.indexOf('=')
+        if (line && !line.startsWith('#') && eq > 0) {
+            String value = line.substring(eq + 1).trim().replaceAll(/^["']|["']$/, '')
+            if (value) dotenv[line.substring(0, eq).trim()] = value
+        }
+    }
+}
+tasks.withType(JavaExec).configureEach { task ->
+    dotenv.each { k, v -> if (System.getenv(k) == null) task.environment(k, v) }
+}
+
+// Evaluation harness (docs/EVAL.md). Free by default; pass options with -Peval="...".
+tasks.register('runEval', JavaExec) {
+    group = 'verification'
+    description = 'Run settler-mind evaluations and write build/eval/<run>/report.md'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.settlermind.eval.EvalRunner'
+    args = (project.findProperty('eval') ?: '').toString().split(' ').findAll { it }
+    workingDir = projectDir
+}
